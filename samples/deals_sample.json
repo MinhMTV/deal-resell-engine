@@ -1,0 +1,26 @@
+[
+  {
+    "source": "mydealz",
+    "title": "Samsung Galaxy S24 256GB für 699€",
+    "url": "https://example.com/deal1",
+    "price": 699,
+    "votes": 182,
+    "posted_at": "2026-03-17T10:00:00Z"
+  },
+  {
+    "source": "preisjaeger",
+    "title": "DJI Mini 4 Pro Drohne 799€ inkl. Tasche",
+    "url": "https://example.com/deal2",
+    "price": 799,
+    "votes": 71,
+    "posted_at": "2026-03-17T11:30:00Z"
+  },
+  {
+    "source": "mydealz",
+    "title": "Kaffeemaschine 29,99€",
+    "url": "https://example.com/deal3",
+    "price": 29.99,
+    "votes": 9,
+    "posted_at": "2026-03-17T12:00:00Z"
+  }
+]

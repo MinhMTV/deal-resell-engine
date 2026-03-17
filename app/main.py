@@ -2,7 +2,7 @@
 import argparse
 from app.config import DB_PATH, MIN_SCORE
 from app.storage import connect, upsert_deal, top_deals
-from app.intake import fetch_live_source, fetch_sample
+from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors
 from app.scoring import score_deal
 
 
@@ -14,11 +14,16 @@ def cmd_ingest(args):
     if args.mode == "sample":
         deals = fetch_sample(args.sample)
     else:
+        cursors = load_cursors()
         for src in ["mydealz", "preisjaeger"]:
-            rows, err = fetch_live_source(src)
+            stop_url = cursors.get(src) if args.new_only else None
+            rows, err = fetch_live_source(src, stop_url=stop_url)
             deals.extend(rows)
+            if rows:
+                cursors[src] = rows[0]["url"]
             if err:
                 errors.append(err)
+        save_cursors(cursors)
 
     for d in deals:
         score, reasons = score_deal(d)
@@ -52,6 +57,7 @@ def main():
     ing.add_argument("--mode", choices=["sample", "live"], default="sample")
     ing.add_argument("--sample", default="samples/deals_sample.json")
     ing.add_argument("--db", default=DB_PATH)
+    ing.add_argument("--new-only", action="store_true", default=False)
     ing.set_defaults(func=cmd_ingest)
 
     rep = sub.add_parser("report")

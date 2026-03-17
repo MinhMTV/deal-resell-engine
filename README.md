@@ -19,15 +19,18 @@ pip install -r requirements.txt
 ## Aktueller Status
 - Funktionierender MVP-Pipeline-CLI:
   - `ingest --mode sample|live`
-  - `report --min-score`
-- Rule-based Score vorhanden (`keyword + community + price bucket`)
+  - `report --min-score --days`
+- Live-Intake robust mit Fallback + Cursor-Logik (`--new-only`) für Polling ohne Duplikat-Waste.
+- Abgelaufene Deals werden über Marker gefiltert (z. B. "abgelaufen", "expired").
+- Rule-based Score vorhanden (`keyword + community + price bucket`) inkl. Reise/Flughafen-Keywords.
 - Persistenz in SQLite (`deals.db`)
 - Sample-Dataset für reproduzierbare Läufe enthalten
 
 ## Start
 ```bash
 python app/main.py ingest --mode sample
-python app/main.py report --min-score 55
+python app/main.py ingest --mode live --new-only   # nur neue Deals seit letztem Poll
+python app/main.py report --min-score 55 --days 7
 ```
 
 ## Hinweis zu Live-Intake

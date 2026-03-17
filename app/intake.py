@@ -4,7 +4,10 @@ from pathlib import Path
 from datetime import datetime, timezone
 import requests
 from bs4 import BeautifulSoup
-from app.config import SOURCES
+from app.config import SOURCES, EXPIRED_MARKERS
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+STATE_PATH = PROJECT_ROOT / "state" / "cursors.json"
 
 
 def _extract_price(text: str):
@@ -16,21 +19,34 @@ def _extract_price(text: str):
     return float(m.group(1).replace(",", "."))
 
 
-def _parse_markdown_deals(markdown: str, source: str):
+def is_expired_title(title: str):
+    t = (title or "").lower()
+    return any(marker in t for marker in EXPIRED_MARKERS)
+
+
+def load_cursors():
+    if not STATE_PATH.exists():
+        return {}
+    return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+
+
+def save_cursors(cursors: dict):
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text(json.dumps(cursors, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _parse_markdown_deals(markdown: str, source: str, stop_url: str | None = None):
     deals = []
     seen = set()
-    # capture lines that include a deal URL; works for both normal and hot-list blocks
     for line in markdown.splitlines():
         if "/deals/" not in line:
             continue
 
-        # Pattern A: hot list lines with image+text then final linked deal URL with quoted title
         m_hot = re.search(r'\]\((https?://[^\s\)]+)\s+"([^"]+)"\)\s*$', line)
         if m_hot and "/deals/" in m_hot.group(1):
             url = m_hot.group(1).strip()
             title = m_hot.group(2).strip().replace("**", "")
         else:
-            # Pattern B: standard markdown links; prefer non-image links
             matches = list(re.finditer(r"(!?)\[([^\]]+)\]\((https?://[^\s\)]+)", line))
             if not matches:
                 continue
@@ -45,7 +61,11 @@ def _parse_markdown_deals(markdown: str, source: str):
                 continue
 
             title, url = chosen[0].strip().replace("**", ""), chosen[1].strip()
-        if url in seen:
+
+        if stop_url and url == stop_url:
+            break
+
+        if url in seen or is_expired_title(title):
             continue
         seen.add(url)
 
@@ -65,10 +85,9 @@ def _parse_markdown_deals(markdown: str, source: str):
     return deals
 
 
-def fetch_live_source(source: str):
+def fetch_live_source(source: str, stop_url: str | None = None):
     url = SOURCES[source]
 
-    # 1) direct RSS/XML attempt
     try:
         r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
         if r.status_code == 200:
@@ -78,6 +97,10 @@ def fetch_live_source(source: str):
                 title = item.title.text.strip() if item.title else ""
                 link = item.link.text.strip() if item.link else ""
                 desc = item.description.text if item.description else ""
+                if stop_url and link == stop_url:
+                    break
+                if is_expired_title(title):
+                    continue
                 items.append(
                     {
                         "source": source,
@@ -93,20 +116,17 @@ def fetch_live_source(source: str):
     except Exception:
         pass
 
-    # 2) robust fallback via jina mirror (markdown extraction)
     try:
         base = "http://www.mydealz.de/deals" if source == "mydealz" else "http://www.preisjaeger.at/deals"
         mirror = f"https://r.jina.ai/{base}"
         r = requests.get(mirror, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
         if r.status_code == 200:
-            deals = _parse_markdown_deals(r.text, source)
-            if deals:
-                return deals, None
+            deals = _parse_markdown_deals(r.text, source, stop_url=stop_url)
+            return deals, None
         return [], f"{source}: fallback mirror HTTP {r.status_code}"
     except Exception as e:
         return [], f"{source}: fallback error {e}"
 
 
 def fetch_sample(path="samples/deals_sample.json"):
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    return data
+    return json.loads(Path(path).read_text(encoding="utf-8"))

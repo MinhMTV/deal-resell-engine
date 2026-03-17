@@ -34,9 +34,14 @@ def upsert_deal(conn, deal: dict):
     )
     conn.commit()
 
-def top_deals(conn, min_score=55, limit=10):
+def top_deals(conn, min_score=55, limit=10, days=7):
     cur = conn.execute(
-        "SELECT source,title,url,price,votes,score,reasons FROM deals WHERE score >= ? ORDER BY score DESC, id DESC LIMIT ?",
-        (min_score, limit),
+        """SELECT source,title,url,price,votes,score,reasons
+           FROM deals
+           WHERE score >= ?
+             AND datetime(created_at) >= datetime('now', ?)
+           ORDER BY score DESC, id DESC
+           LIMIT ?""",
+        (min_score, f"-{int(days)} days", limit),
     )
     return cur.fetchall()

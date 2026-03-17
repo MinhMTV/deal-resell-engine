@@ -35,10 +35,10 @@ def cmd_ingest(args):
 
 def cmd_report(args):
     conn = connect(args.db)
-    rows = top_deals(conn, min_score=args.min_score, limit=args.limit)
+    rows = top_deals(conn, min_score=args.min_score, limit=args.limit, days=args.days)
     if not rows:
-      print("No deals above threshold.")
-      return
+        print("No deals above threshold.")
+        return
     for i, r in enumerate(rows, 1):
         src, title, url, price, votes, score, reasons = r
         print(f"{i}. [{src}] score={score} price={price} votes={votes} :: {title}\n   {url}\n   reasons: {reasons}")
@@ -58,6 +58,7 @@ def main():
     rep.add_argument("--db", default=DB_PATH)
     rep.add_argument("--min-score", type=float, default=MIN_SCORE)
     rep.add_argument("--limit", type=int, default=10)
+    rep.add_argument("--days", type=int, default=7)
     rep.set_defaults(func=cmd_report)
 
     args = p.parse_args()

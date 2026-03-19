@@ -3,6 +3,7 @@ from app.market_price import (
     estimate_profit,
     StaticTableMarketPriceProvider,
     EbaySoldProvider,
+    build_provider,
 )
 
 
@@ -30,6 +31,18 @@ def test_ebay_provider_stub_returns_none():
 def test_estimate_market_price_default_fallback_chain_uses_static_table():
     deal = {"normalized_model": "iphone 15 pro", "normalized_storage_gb": 128}
     assert estimate_market_price(deal) == 980.0
+
+
+def test_build_provider_static_mode():
+    provider = build_provider("static")
+    deal = {"normalized_model": "iphone 15", "normalized_storage_gb": 128}
+    assert provider.estimate(deal) == 760.0
+
+
+def test_build_provider_ebay_mode_returns_none_with_stub():
+    provider = build_provider("ebay")
+    deal = {"normalized_model": "iphone 15", "normalized_storage_gb": 128}
+    assert provider.estimate(deal) is None
 
 
 def test_estimate_profit_positive_case():

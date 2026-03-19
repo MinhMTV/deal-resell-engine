@@ -55,19 +55,32 @@ class EbaySoldProvider:
         return None
 
 
-def estimate_market_price(deal: dict, provider: MarketPriceProvider | None = None) -> Optional[float]:
-    if provider is not None:
-        return provider.estimate(deal)
+def build_provider(mode: str = "auto") -> MarketPriceProvider:
+    mode = (mode or "auto").lower()
+    if mode == "static":
+        return StaticTableMarketPriceProvider()
+    if mode == "ebay":
+        return EbaySoldProvider()
+    if mode == "auto":
+        return ChainedMarketPriceProvider([EbaySoldProvider(), StaticTableMarketPriceProvider()])
+    raise ValueError(f"Unsupported provider mode: {mode}")
 
-    providers: list[MarketPriceProvider] = [
-        EbaySoldProvider(),
-        StaticTableMarketPriceProvider(),
-    ]
-    for p in providers:
-        value = p.estimate(deal)
-        if value is not None:
-            return value
-    return None
+
+class ChainedMarketPriceProvider:
+    def __init__(self, providers: list[MarketPriceProvider]):
+        self.providers = providers
+
+    def estimate(self, deal: dict) -> Optional[float]:
+        for p in self.providers:
+            value = p.estimate(deal)
+            if value is not None:
+                return value
+        return None
+
+
+def estimate_market_price(deal: dict, provider: MarketPriceProvider | None = None) -> Optional[float]:
+    provider = provider or build_provider("auto")
+    return provider.estimate(deal)
 
 
 def estimate_profit(

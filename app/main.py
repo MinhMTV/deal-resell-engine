@@ -11,7 +11,7 @@ from app.storage import (
 from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors
 from app.scoring import score_deal
 from app.normalize import normalize_product
-from app.market_price import estimate_market_price, estimate_profit
+from app.market_price import estimate_market_price, estimate_profit, build_provider
 
 
 def cmd_ingest(args):
@@ -93,6 +93,8 @@ def cmd_profit_report(args):
         print("No deals above threshold.")
         return
 
+    provider = build_provider(args.provider)
+
     for i, r in enumerate(rows, 1):
         (
             src,
@@ -112,7 +114,7 @@ def cmd_profit_report(args):
             "normalized_model": normalized_model,
             "normalized_storage_gb": normalized_storage_gb,
         }
-        market_price = estimate_market_price(deal)
+        market_price = estimate_market_price(deal, provider=provider)
         if market_price is None or price is None:
             print(f"{i}. [{src}] score={score} :: {title}\n   {url}\n   profit_estimate: unavailable")
             continue
@@ -154,6 +156,7 @@ def main():
     profit.add_argument("--min-score", type=float, default=MIN_SCORE)
     profit.add_argument("--limit", type=int, default=10)
     profit.add_argument("--days", type=int, default=7)
+    profit.add_argument("--provider", choices=["auto", "static", "ebay"], default="auto")
     profit.set_defaults(func=cmd_profit_report)
 
     args = p.parse_args()

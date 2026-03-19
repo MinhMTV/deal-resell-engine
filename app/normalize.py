@@ -59,7 +59,7 @@ def _normalize_space(text: str) -> str:
 
 def extract_storage_gb(title: str):
     t = (title or "").lower()
-    m = re.search(r"\b(\d{2,4})\s?(tb|gb)\b", t)
+    m = re.search(r"\b(\d{1,4})\s?(tb|gb)\b", t)
     if not m:
         return None
     size = int(m.group(1))

@@ -167,7 +167,19 @@ def cmd_profit_report(args):
         candidates = candidates[: max(0, int(args.top))]
 
     if args.out == "json":
-        print(json.dumps(candidates, ensure_ascii=False, indent=2))
+        payload = candidates
+        if args.json_schema == "alert":
+            payload = [
+                {
+                    "title": c["title"],
+                    "url": c["url"],
+                    "profit": c["profit"],
+                    "roi_pct": c["roi_pct"],
+                    "score": c["score"],
+                }
+                for c in candidates
+            ]
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
 
     for i, c in enumerate(candidates, 1):
@@ -213,6 +225,7 @@ def main():
     profit.add_argument("--sort-by", choices=["score", "profit"], default="score")
     profit.add_argument("--top", type=int, default=None)
     profit.add_argument("--out", choices=["text", "json"], default="text")
+    profit.add_argument("--json-schema", choices=["full", "alert"], default="full")
     profit.set_defaults(func=cmd_profit_report)
 
     args = p.parse_args()

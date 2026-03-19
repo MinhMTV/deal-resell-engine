@@ -4,6 +4,7 @@ from app.config import DB_PATH, MIN_SCORE
 from app.storage import connect, upsert_deal, top_deals
 from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors
 from app.scoring import score_deal
+from app.normalize import normalize_product
 
 
 def cmd_ingest(args):
@@ -26,6 +27,7 @@ def cmd_ingest(args):
         save_cursors(cursors)
 
     for d in deals:
+        d.update(normalize_product(d.get("title", "")))
         score, reasons = score_deal(d)
         d["score"] = score
         d["reasons"] = reasons

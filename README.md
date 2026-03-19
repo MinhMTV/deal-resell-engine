@@ -24,6 +24,7 @@ pip install -r requirements.txt
 - Abgelaufene Deals werden über Marker gefiltert (z. B. "abgelaufen", "expired").
 - Rule-based Score vorhanden (`keyword + community + price bucket`) inkl. Reise/Flughafen-Keywords.
 - Persistenz in SQLite (`deals.db`)
+- Produktnormalisierung gestartet (Brand/Model/Storage/Color) und im DB-Schema hinterlegt
 - Sample-Dataset für reproduzierbare Läufe enthalten
 
 ## Start

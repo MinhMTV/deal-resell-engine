@@ -1,4 +1,8 @@
-from app.market_price import estimate_market_price, estimate_profit
+from app.market_price import (
+    estimate_market_price,
+    estimate_profit,
+    StaticTableMarketPriceProvider,
+)
 
 
 def test_estimate_market_price_known_model_with_storage_bonus():
@@ -9,6 +13,12 @@ def test_estimate_market_price_known_model_with_storage_bonus():
 def test_estimate_market_price_unknown_model():
     deal = {"normalized_model": "random model", "normalized_storage_gb": 128}
     assert estimate_market_price(deal) is None
+
+
+def test_estimate_market_price_custom_provider_table():
+    provider = StaticTableMarketPriceProvider(base_prices={"iphone 15 pro": 1000.0})
+    deal = {"normalized_model": "iphone 15 pro", "normalized_storage_gb": 128}
+    assert estimate_market_price(deal, provider=provider) == 1000.0
 
 
 def test_estimate_profit_positive_case():

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Protocol
 
 
 BASE_MODEL_PRICES = {
@@ -13,27 +13,41 @@ BASE_MODEL_PRICES = {
 }
 
 
-def estimate_market_price(deal: dict) -> Optional[float]:
-    model = deal.get("normalized_model")
-    if not model:
-        return None
+class MarketPriceProvider(Protocol):
+    def estimate(self, deal: dict) -> Optional[float]:
+        ...
 
-    base = BASE_MODEL_PRICES.get(str(model).lower())
-    if base is None:
-        return None
 
-    storage_gb = deal.get("normalized_storage_gb")
-    if storage_gb is not None:
-        try:
-            storage_gb = int(storage_gb)
-            if storage_gb >= 512:
-                base += 120
-            elif storage_gb >= 256:
-                base += 60
-        except Exception:
-            pass
+class StaticTableMarketPriceProvider:
+    def __init__(self, base_prices: dict[str, float] | None = None):
+        self.base_prices = base_prices or BASE_MODEL_PRICES
 
-    return round(base, 2)
+    def estimate(self, deal: dict) -> Optional[float]:
+        model = deal.get("normalized_model")
+        if not model:
+            return None
+
+        base = self.base_prices.get(str(model).lower())
+        if base is None:
+            return None
+
+        storage_gb = deal.get("normalized_storage_gb")
+        if storage_gb is not None:
+            try:
+                storage_gb = int(storage_gb)
+                if storage_gb >= 512:
+                    base += 120
+                elif storage_gb >= 256:
+                    base += 60
+            except Exception:
+                pass
+
+        return round(base, 2)
+
+
+def estimate_market_price(deal: dict, provider: MarketPriceProvider | None = None) -> Optional[float]:
+    provider = provider or StaticTableMarketPriceProvider()
+    return provider.estimate(deal)
 
 
 def estimate_profit(

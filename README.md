@@ -30,6 +30,7 @@ pip install -r requirements.txt
 - Produktnormalisierung gestartet (Brand/Model/Storage/Color) und im DB-Schema hinterlegt
 - Modell-Erkennung erweitert um Varianten (z. B. iPhone Pro Max, Galaxy Ultra/Plus/FE)
 - Mock-Marktpreis-Adapter + erste Profit-Schätzung (Fee/Versand/Risikoabschlag) als CLI-Report verfügbar
+- Marktpreis-Provider als austauschbares Interface vorbereitet (aktuell statische Tabelle)
 - Sample-Dataset für reproduzierbare Läufe enthalten
 
 ## Start

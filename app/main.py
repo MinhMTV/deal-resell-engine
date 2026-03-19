@@ -94,6 +94,7 @@ def cmd_profit_report(args):
         return
 
     provider = build_provider(args.provider)
+    shown = 0
 
     for i, r in enumerate(rows, 1):
         (
@@ -116,16 +117,22 @@ def cmd_profit_report(args):
         }
         market_price = estimate_market_price(deal, provider=provider)
         if market_price is None or price is None:
-            print(f"{i}. [{src}] score={score} :: {title}\n   {url}\n   profit_estimate: unavailable")
             continue
 
         profit = estimate_profit(float(price), market_price)
+        if profit < args.min_profit:
+            continue
+
+        shown += 1
         print(
-            f"{i}. [{src}] score={score} buy={price} market≈{market_price} profit≈{profit} :: {title}\n"
+            f"{shown}. [{src}] score={score} buy={price} market≈{market_price} profit≈{profit} :: {title}\n"
             f"   {url}\n"
             f"   normalized: brand={normalized_brand} model={normalized_model} storage_gb={normalized_storage_gb} color={normalized_color}\n"
             f"   reasons: {reasons}"
         )
+
+    if shown == 0:
+        print("No deals matching profit criteria.")
 
 
 def main():
@@ -157,6 +164,7 @@ def main():
     profit.add_argument("--limit", type=int, default=10)
     profit.add_argument("--days", type=int, default=7)
     profit.add_argument("--provider", choices=["auto", "static", "ebay"], default="auto")
+    profit.add_argument("--min-profit", type=float, default=0.0)
     profit.set_defaults(func=cmd_profit_report)
 
     args = p.parse_args()

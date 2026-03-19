@@ -21,6 +21,7 @@ pip install -r requirements.txt
   - `ingest --mode sample|live`
   - `report --min-score --days`
 - Live-Intake robust mit Fallback + Cursor-Logik (`--new-only`) für Polling ohne Duplikat-Waste.
+- Markdown-Fallback-Parser gehärtet: Bild-/Asset-Links werden gefiltert, echte Deal-URLs priorisiert.
 - Abgelaufene Deals werden über Marker gefiltert (z. B. "abgelaufen", "expired").
 - Rule-based Score vorhanden (`keyword + community + price bucket`) inkl. Reise/Flughafen-Keywords.
 - Persistenz in SQLite (`deals.db`)

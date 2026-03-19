@@ -35,6 +35,11 @@ def save_cursors(cursors: dict):
     STATE_PATH.write_text(json.dumps(cursors, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def _is_probably_image_url(url: str) -> bool:
+    u = (url or "").lower()
+    return any(u.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif"])
+
+
 def _parse_markdown_deals(markdown: str, source: str, stop_url: str | None = None):
     deals = []
     seen = set()
@@ -65,7 +70,13 @@ def _parse_markdown_deals(markdown: str, source: str, stop_url: str | None = Non
         if stop_url and url == stop_url:
             break
 
-        if url in seen or is_expired_title(title):
+        if (
+            url in seen
+            or "/deals/" not in url
+            or _is_probably_image_url(url)
+            or title.lower().startswith("![image")
+            or is_expired_title(title)
+        ):
             continue
         seen.add(url)
 

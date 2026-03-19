@@ -171,6 +171,8 @@ def cmd_profit_report(args):
         if args.json_schema == "alert":
             payload = [
                 {
+                    "source": c["src"],
+                    "normalized_model": c["normalized_model"],
                     "title": c["title"],
                     "url": c["url"],
                     "profit": c["profit"],

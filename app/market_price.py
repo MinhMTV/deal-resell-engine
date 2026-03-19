@@ -45,9 +45,29 @@ class StaticTableMarketPriceProvider:
         return round(base, 2)
 
 
+class EbaySoldProvider:
+    """Stub provider placeholder for future real sold-listings integration."""
+
+    def estimate(self, deal: dict) -> Optional[float]:
+        # TODO: replace with real API/client integration.
+        # For now, intentionally return no estimate.
+        _ = deal
+        return None
+
+
 def estimate_market_price(deal: dict, provider: MarketPriceProvider | None = None) -> Optional[float]:
-    provider = provider or StaticTableMarketPriceProvider()
-    return provider.estimate(deal)
+    if provider is not None:
+        return provider.estimate(deal)
+
+    providers: list[MarketPriceProvider] = [
+        EbaySoldProvider(),
+        StaticTableMarketPriceProvider(),
+    ]
+    for p in providers:
+        value = p.estimate(deal)
+        if value is not None:
+            return value
+    return None
 
 
 def estimate_profit(

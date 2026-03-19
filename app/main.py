@@ -150,6 +150,9 @@ def cmd_profit_report(args):
     else:
         candidates.sort(key=lambda x: (x["score"], x["profit"]), reverse=True)
 
+    if args.top is not None:
+        candidates = candidates[: max(0, int(args.top))]
+
     for i, c in enumerate(candidates, 1):
         print(
             f"{i}. [{c['src']}] score={c['score']} buy={c['price']} market≈{c['market_price']} profit≈{c['profit']} :: {c['title']}\n"
@@ -190,6 +193,7 @@ def main():
     profit.add_argument("--provider", choices=["auto", "static", "ebay"], default="auto")
     profit.add_argument("--min-profit", type=float, default=0.0)
     profit.add_argument("--sort-by", choices=["score", "profit"], default="score")
+    profit.add_argument("--top", type=int, default=None)
     profit.set_defaults(func=cmd_profit_report)
 
     args = p.parse_args()

@@ -30,7 +30,7 @@ pip install -r requirements.txt
 - Produktnormalisierung gestartet (Brand/Model/Storage/Color) und im DB-Schema hinterlegt
 - Modell-Erkennung erweitert um Varianten (z. B. iPhone Pro Max, Galaxy Ultra/Plus/FE)
 - Mock-Marktpreis-Adapter + erste Profit-Schätzung (Fee/Versand/Risikoabschlag) als CLI-Report verfügbar
-- Profit-Report unterstützt `--min-profit` für fokussierte Kandidatenliste und `--sort-by score|profit`
+- Profit-Report unterstützt `--min-profit` für fokussierte Kandidatenliste, `--sort-by score|profit` und `--top N`
 - Marktpreis-Provider als austauschbares Interface vorbereitet (EbaySold-Stub + statische Fallback-Tabelle), auswählbar via `--provider auto|static|ebay`
 - Sample-Dataset für reproduzierbare Läufe enthalten
 
@@ -40,7 +40,7 @@ python -m app.main ingest --mode sample
 python -m app.main ingest --mode live --new-only   # nur neue Deals seit letztem Poll
 python -m app.main report --min-score 55 --days 7
 python -m app.main backfill-normalization --limit 500
-python -m app.main profit-report --min-score 55 --days 7 --provider auto --min-profit 0 --sort-by profit
+python -m app.main profit-report --min-score 55 --days 7 --provider auto --min-profit 0 --sort-by profit --top 5
 ```
 
 ## Hinweis zu Live-Intake

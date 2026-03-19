@@ -67,7 +67,8 @@ def upsert_deal(conn, deal: dict):
 
 def top_deals(conn, min_score=55, limit=10, days=7):
     cur = conn.execute(
-        """SELECT source,title,url,price,votes,score,reasons
+        """SELECT source,title,url,price,votes,score,reasons,
+                  normalized_brand,normalized_model,normalized_storage_gb,normalized_color
            FROM deals
            WHERE score >= ?
              AND datetime(created_at) >= datetime('now', ?)

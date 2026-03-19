@@ -47,8 +47,25 @@ def cmd_report(args):
         print("No deals above threshold.")
         return
     for i, r in enumerate(rows, 1):
-        src, title, url, price, votes, score, reasons = r
-        print(f"{i}. [{src}] score={score} price={price} votes={votes} :: {title}\n   {url}\n   reasons: {reasons}")
+        (
+            src,
+            title,
+            url,
+            price,
+            votes,
+            score,
+            reasons,
+            normalized_brand,
+            normalized_model,
+            normalized_storage_gb,
+            normalized_color,
+        ) = r
+        print(
+            f"{i}. [{src}] score={score} price={price} votes={votes} :: {title}\n"
+            f"   {url}\n"
+            f"   normalized: brand={normalized_brand} model={normalized_model} storage_gb={normalized_storage_gb} color={normalized_color}\n"
+            f"   reasons: {reasons}"
+        )
 
 
 def main():

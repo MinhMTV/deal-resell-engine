@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 from app.config import DB_PATH, MIN_SCORE
 from app.storage import (
@@ -13,6 +14,12 @@ from app.intake import fetch_live_source, fetch_sample, load_cursors, save_curso
 from app.scoring import score_deal
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price, estimate_profit, build_provider
+
+
+def _build_alert_key(source: str, normalized_model: str | None, url: str) -> str:
+    model = normalized_model or "unknown-model"
+    url_hash = hashlib.sha1((url or "").encode("utf-8")).hexdigest()[:10]
+    return f"{source}:{model}:{url_hash}"
 
 
 def cmd_ingest(args):
@@ -171,6 +178,7 @@ def cmd_profit_report(args):
         if args.json_schema == "alert":
             payload = [
                 {
+                    "alert_key": _build_alert_key(c["src"], c["normalized_model"], c["url"]),
                     "source": c["src"],
                     "normalized_model": c["normalized_model"],
                     "title": c["title"],

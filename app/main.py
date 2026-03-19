@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 from app.config import DB_PATH, MIN_SCORE
 from app.storage import (
     connect,
@@ -90,7 +91,10 @@ def cmd_profit_report(args):
     conn = connect(args.db)
     rows = top_deals(conn, min_score=args.min_score, limit=args.limit, days=args.days)
     if not rows:
-        print("No deals above threshold.")
+        if args.out == "json":
+            print("[]")
+        else:
+            print("No deals above threshold.")
         return
 
     provider = build_provider(args.provider)
@@ -148,7 +152,10 @@ def cmd_profit_report(args):
         )
 
     if not candidates:
-        print("No deals matching profit criteria.")
+        if args.out == "json":
+            print("[]")
+        else:
+            print("No deals matching profit criteria.")
         return
 
     if args.sort_by == "profit":
@@ -158,6 +165,10 @@ def cmd_profit_report(args):
 
     if args.top is not None:
         candidates = candidates[: max(0, int(args.top))]
+
+    if args.out == "json":
+        print(json.dumps(candidates, ensure_ascii=False, indent=2))
+        return
 
     for i, c in enumerate(candidates, 1):
         print(
@@ -201,6 +212,7 @@ def main():
     profit.add_argument("--min-roi", type=float, default=None, help="Minimum ROI percent, e.g. 10 for 10%%")
     profit.add_argument("--sort-by", choices=["score", "profit"], default="score")
     profit.add_argument("--top", type=int, default=None)
+    profit.add_argument("--out", choices=["text", "json"], default="text")
     profit.set_defaults(func=cmd_profit_report)
 
     args = p.parse_args()

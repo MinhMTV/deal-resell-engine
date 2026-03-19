@@ -20,6 +20,7 @@ pip install -r requirements.txt
 - Funktionierender MVP-Pipeline-CLI:
   - `ingest --mode sample|live`
   - `report --min-score --days`
+  - `backfill-normalization --limit`
 - Live-Intake robust mit Fallback + Cursor-Logik (`--new-only`) für Polling ohne Duplikat-Waste.
 - Markdown-Fallback-Parser gehärtet: Bild-/Asset-Links werden gefiltert, echte Deal-URLs priorisiert.
 - Abgelaufene Deals werden über Marker gefiltert (z. B. "abgelaufen", "expired").
@@ -31,9 +32,10 @@ pip install -r requirements.txt
 
 ## Start
 ```bash
-python app/main.py ingest --mode sample
-python app/main.py ingest --mode live --new-only   # nur neue Deals seit letztem Poll
-python app/main.py report --min-score 55 --days 7
+python -m app.main ingest --mode sample
+python -m app.main ingest --mode live --new-only   # nur neue Deals seit letztem Poll
+python -m app.main report --min-score 55 --days 7
+python -m app.main backfill-normalization --limit 500
 ```
 
 ## Hinweis zu Live-Intake

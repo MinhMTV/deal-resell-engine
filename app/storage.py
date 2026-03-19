@@ -77,3 +77,37 @@ def top_deals(conn, min_score=55, limit=10, days=7):
         (min_score, f"-{int(days)} days", limit),
     )
     return cur.fetchall()
+
+
+def iter_deals_missing_normalization(conn, limit=500):
+    cur = conn.execute(
+        """SELECT id, title
+           FROM deals
+           WHERE normalized_brand IS NULL
+             AND normalized_model IS NULL
+             AND normalized_storage_gb IS NULL
+             AND normalized_color IS NULL
+           ORDER BY id ASC
+           LIMIT ?""",
+        (int(limit),),
+    )
+    return cur.fetchall()
+
+
+def update_normalization(conn, deal_id: int, normalized: dict):
+    conn.execute(
+        """UPDATE deals
+           SET normalized_brand=?,
+               normalized_model=?,
+               normalized_storage_gb=?,
+               normalized_color=?
+           WHERE id=?""",
+        (
+            normalized.get("normalized_brand"),
+            normalized.get("normalized_model"),
+            normalized.get("normalized_storage_gb"),
+            normalized.get("normalized_color"),
+            int(deal_id),
+        ),
+    )
+    conn.commit()

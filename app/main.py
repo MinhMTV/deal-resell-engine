@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 from app.config import DB_PATH, MIN_SCORE
-from app.storage import connect, upsert_deal, top_deals
+from app.storage import (
+    connect,
+    upsert_deal,
+    top_deals,
+    iter_deals_missing_normalization,
+    update_normalization,
+)
 from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors
 from app.scoring import score_deal
 from app.normalize import normalize_product
@@ -68,6 +74,17 @@ def cmd_report(args):
         )
 
 
+def cmd_backfill_normalization(args):
+    conn = connect(args.db)
+    rows = iter_deals_missing_normalization(conn, limit=args.limit)
+    updated = 0
+    for deal_id, title in rows:
+        normalized = normalize_product(title or "")
+        update_normalization(conn, deal_id, normalized)
+        updated += 1
+    print(f"Backfilled normalization for: {updated} deals")
+
+
 def main():
     p = argparse.ArgumentParser(description="Deal Resell Engine (rule-based MVP)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -85,6 +102,11 @@ def main():
     rep.add_argument("--limit", type=int, default=10)
     rep.add_argument("--days", type=int, default=7)
     rep.set_defaults(func=cmd_report)
+
+    backfill = sub.add_parser("backfill-normalization")
+    backfill.add_argument("--db", default=DB_PATH)
+    backfill.add_argument("--limit", type=int, default=500)
+    backfill.set_defaults(func=cmd_backfill_normalization)
 
     args = p.parse_args()
     args.func(args)

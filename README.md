@@ -26,6 +26,7 @@ pip install -r requirements.txt
 - Rule-based Score vorhanden (`keyword + community + price bucket`) inkl. Reise/Flughafen-Keywords.
 - Persistenz in SQLite (`deals.db`)
 - Produktnormalisierung gestartet (Brand/Model/Storage/Color) und im DB-Schema hinterlegt
+- Modell-Erkennung erweitert um Varianten (z. B. iPhone Pro Max, Galaxy Ultra/Plus/FE)
 - Sample-Dataset für reproduzierbare Läufe enthalten
 
 ## Start

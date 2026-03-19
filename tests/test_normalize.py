@@ -4,7 +4,7 @@ from app.normalize import normalize_product
 def test_normalize_iphone_line():
     row = normalize_product("Apple iPhone 15 Pro 256GB Schwarz")
     assert row["normalized_brand"] == "apple"
-    assert row["normalized_model"] == "iphone 15"
+    assert row["normalized_model"] == "iphone 15 pro"
     assert row["normalized_storage_gb"] == 256
     assert row["normalized_color"] == "black"
 
@@ -15,6 +15,22 @@ def test_normalize_tb_storage_and_pixel_model():
     assert row["normalized_model"] == "pixel 8 pro"
     assert row["normalized_storage_gb"] == 1024
     assert row["normalized_color"] == "blue"
+
+
+def test_normalize_iphone_variant_pro_max():
+    row = normalize_product("Apple iPhone 15 Pro Max 512GB Weiß")
+    assert row["normalized_brand"] == "apple"
+    assert row["normalized_model"] == "iphone 15 pro max"
+    assert row["normalized_storage_gb"] == 512
+    assert row["normalized_color"] == "white"
+
+
+def test_normalize_galaxy_ultra_variant():
+    row = normalize_product("Samsung Galaxy S24 Ultra 256GB Titanium Schwarz")
+    assert row["normalized_brand"] == "samsung"
+    assert row["normalized_model"] == "galaxy s24 ultra"
+    assert row["normalized_storage_gb"] == 256
+    assert row["normalized_color"] == "black"
 
 
 def test_normalize_unknown_product():

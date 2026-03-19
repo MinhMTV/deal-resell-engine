@@ -41,8 +41,8 @@ COLOR_ALIASES = {
 
 
 MODEL_PATTERNS = [
-    r"\biphone\s?(?:\d{1,2}|se)\b",
-    r"\bgalaxy\s?(?:s|a|z)\d{1,2}\b",
+    r"\biphone\s?(?:\d{1,2}|se)(?:\s?(?:pro\s?max|pro|max|plus))?\b",
+    r"\bgalaxy\s?(?:s|a|z)\d{1,2}(?:\s?(?:ultra|plus|fe))?\b",
     r"\bpixel\s?\d{1,2}(?:\s?(?:pro|xl|a))?\b",
     r"\bipad\s?(?:air|mini|pro)?\s?\d{0,2}\b",
     r"\bmacbook\s?(?:air|pro)?\b",

@@ -94,9 +94,9 @@ def cmd_profit_report(args):
         return
 
     provider = build_provider(args.provider)
-    shown = 0
+    candidates = []
 
-    for i, r in enumerate(rows, 1):
+    for r in rows:
         (
             src,
             title,
@@ -123,16 +123,40 @@ def cmd_profit_report(args):
         if profit < args.min_profit:
             continue
 
-        shown += 1
-        print(
-            f"{shown}. [{src}] score={score} buy={price} market≈{market_price} profit≈{profit} :: {title}\n"
-            f"   {url}\n"
-            f"   normalized: brand={normalized_brand} model={normalized_model} storage_gb={normalized_storage_gb} color={normalized_color}\n"
-            f"   reasons: {reasons}"
+        candidates.append(
+            {
+                "src": src,
+                "title": title,
+                "url": url,
+                "price": price,
+                "votes": votes,
+                "score": score,
+                "reasons": reasons,
+                "normalized_brand": normalized_brand,
+                "normalized_model": normalized_model,
+                "normalized_storage_gb": normalized_storage_gb,
+                "normalized_color": normalized_color,
+                "market_price": market_price,
+                "profit": profit,
+            }
         )
 
-    if shown == 0:
+    if not candidates:
         print("No deals matching profit criteria.")
+        return
+
+    if args.sort_by == "profit":
+        candidates.sort(key=lambda x: (x["profit"], x["score"]), reverse=True)
+    else:
+        candidates.sort(key=lambda x: (x["score"], x["profit"]), reverse=True)
+
+    for i, c in enumerate(candidates, 1):
+        print(
+            f"{i}. [{c['src']}] score={c['score']} buy={c['price']} market≈{c['market_price']} profit≈{c['profit']} :: {c['title']}\n"
+            f"   {c['url']}\n"
+            f"   normalized: brand={c['normalized_brand']} model={c['normalized_model']} storage_gb={c['normalized_storage_gb']} color={c['normalized_color']}\n"
+            f"   reasons: {c['reasons']}"
+        )
 
 
 def main():
@@ -165,6 +189,7 @@ def main():
     profit.add_argument("--days", type=int, default=7)
     profit.add_argument("--provider", choices=["auto", "static", "ebay"], default="auto")
     profit.add_argument("--min-profit", type=float, default=0.0)
+    profit.add_argument("--sort-by", choices=["score", "profit"], default="score")
     profit.set_defaults(func=cmd_profit_report)
 
     args = p.parse_args()

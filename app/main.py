@@ -11,6 +11,7 @@ from app.storage import (
 from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors
 from app.scoring import score_deal
 from app.normalize import normalize_product
+from app.market_price import estimate_market_price, estimate_profit
 
 
 def cmd_ingest(args):
@@ -85,6 +86,46 @@ def cmd_backfill_normalization(args):
     print(f"Backfilled normalization for: {updated} deals")
 
 
+def cmd_profit_report(args):
+    conn = connect(args.db)
+    rows = top_deals(conn, min_score=args.min_score, limit=args.limit, days=args.days)
+    if not rows:
+        print("No deals above threshold.")
+        return
+
+    for i, r in enumerate(rows, 1):
+        (
+            src,
+            title,
+            url,
+            price,
+            votes,
+            score,
+            reasons,
+            normalized_brand,
+            normalized_model,
+            normalized_storage_gb,
+            normalized_color,
+        ) = r
+
+        deal = {
+            "normalized_model": normalized_model,
+            "normalized_storage_gb": normalized_storage_gb,
+        }
+        market_price = estimate_market_price(deal)
+        if market_price is None or price is None:
+            print(f"{i}. [{src}] score={score} :: {title}\n   {url}\n   profit_estimate: unavailable")
+            continue
+
+        profit = estimate_profit(float(price), market_price)
+        print(
+            f"{i}. [{src}] score={score} buy={price} market≈{market_price} profit≈{profit} :: {title}\n"
+            f"   {url}\n"
+            f"   normalized: brand={normalized_brand} model={normalized_model} storage_gb={normalized_storage_gb} color={normalized_color}\n"
+            f"   reasons: {reasons}"
+        )
+
+
 def main():
     p = argparse.ArgumentParser(description="Deal Resell Engine (rule-based MVP)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -107,6 +148,13 @@ def main():
     backfill.add_argument("--db", default=DB_PATH)
     backfill.add_argument("--limit", type=int, default=500)
     backfill.set_defaults(func=cmd_backfill_normalization)
+
+    profit = sub.add_parser("profit-report")
+    profit.add_argument("--db", default=DB_PATH)
+    profit.add_argument("--min-score", type=float, default=MIN_SCORE)
+    profit.add_argument("--limit", type=int, default=10)
+    profit.add_argument("--days", type=int, default=7)
+    profit.set_defaults(func=cmd_profit_report)
 
     args = p.parse_args()
     args.func(args)

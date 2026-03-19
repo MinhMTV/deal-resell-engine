@@ -21,6 +21,7 @@ pip install -r requirements.txt
   - `ingest --mode sample|live`
   - `report --min-score --days`
   - `backfill-normalization --limit`
+  - `profit-report --min-score --days`
 - Live-Intake robust mit Fallback + Cursor-Logik (`--new-only`) für Polling ohne Duplikat-Waste.
 - Markdown-Fallback-Parser gehärtet: Bild-/Asset-Links werden gefiltert, echte Deal-URLs priorisiert.
 - Abgelaufene Deals werden über Marker gefiltert (z. B. "abgelaufen", "expired").
@@ -28,6 +29,7 @@ pip install -r requirements.txt
 - Persistenz in SQLite (`deals.db`)
 - Produktnormalisierung gestartet (Brand/Model/Storage/Color) und im DB-Schema hinterlegt
 - Modell-Erkennung erweitert um Varianten (z. B. iPhone Pro Max, Galaxy Ultra/Plus/FE)
+- Mock-Marktpreis-Adapter + erste Profit-Schätzung (Fee/Versand/Risikoabschlag) als CLI-Report verfügbar
 - Sample-Dataset für reproduzierbare Läufe enthalten
 
 ## Start
@@ -36,6 +38,7 @@ python -m app.main ingest --mode sample
 python -m app.main ingest --mode live --new-only   # nur neue Deals seit letztem Poll
 python -m app.main report --min-score 55 --days 7
 python -m app.main backfill-normalization --limit 500
+python -m app.main profit-report --min-score 55 --days 7
 ```
 
 ## Hinweis zu Live-Intake

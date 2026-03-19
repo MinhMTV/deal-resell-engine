@@ -119,8 +119,13 @@ def cmd_profit_report(args):
         if market_price is None or price is None:
             continue
 
-        profit = estimate_profit(float(price), market_price)
+        buy_price = float(price)
+        profit = estimate_profit(buy_price, market_price)
         if profit < args.min_profit:
+            continue
+
+        roi_pct = (profit / buy_price * 100.0) if buy_price > 0 else 0.0
+        if args.min_roi is not None and roi_pct < args.min_roi:
             continue
 
         candidates.append(
@@ -138,6 +143,7 @@ def cmd_profit_report(args):
                 "normalized_color": normalized_color,
                 "market_price": market_price,
                 "profit": profit,
+                "roi_pct": round(roi_pct, 2),
             }
         )
 
@@ -155,7 +161,7 @@ def cmd_profit_report(args):
 
     for i, c in enumerate(candidates, 1):
         print(
-            f"{i}. [{c['src']}] score={c['score']} buy={c['price']} market≈{c['market_price']} profit≈{c['profit']} :: {c['title']}\n"
+            f"{i}. [{c['src']}] score={c['score']} buy={c['price']} market≈{c['market_price']} profit≈{c['profit']} roi≈{c['roi_pct']}% :: {c['title']}\n"
             f"   {c['url']}\n"
             f"   normalized: brand={c['normalized_brand']} model={c['normalized_model']} storage_gb={c['normalized_storage_gb']} color={c['normalized_color']}\n"
             f"   reasons: {c['reasons']}"
@@ -192,6 +198,7 @@ def main():
     profit.add_argument("--days", type=int, default=7)
     profit.add_argument("--provider", choices=["auto", "static", "ebay"], default="auto")
     profit.add_argument("--min-profit", type=float, default=0.0)
+    profit.add_argument("--min-roi", type=float, default=None, help="Minimum ROI percent, e.g. 10 for 10%%")
     profit.add_argument("--sort-by", choices=["score", "profit"], default="score")
     profit.add_argument("--top", type=int, default=None)
     profit.set_defaults(func=cmd_profit_report)

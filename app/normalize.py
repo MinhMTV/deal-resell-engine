@@ -45,7 +45,7 @@ MODEL_PATTERNS = [
     r"\bgalaxy\s?(?:s|a|z)\d{1,2}(?:\s?(?:ultra|plus|fe))?\b",
     r"\bpixel\s?\d{1,2}(?:\s?(?:pro|xl|a))?\b",
     r"\bipad\s?(?:air|mini|pro)?\s?\d{0,2}\b",
-    r"\bmacbook\s?(?:air|pro)?\b",
+    r"\bmacbook\s?(?:air|pro)(?:\s?m\d)?\b",
     r"\bplaystation\s?\d\b",
     r"\bps\d\b",
     r"\bxbox\s?(?:series\s?[xs]|one)\b",
@@ -105,6 +105,16 @@ def extract_brand(title: str):
 
 def extract_model(title: str):
     t = _normalize_space((title or "").lower())
+
+    # MacBook enrichment: append chip generation when present (e.g. m4).
+    m_mb = re.search(r"\bmacbook\s?(air|pro)\b", t)
+    if m_mb:
+        chip = re.search(r"\bm(\d)\b", t)
+        base = f"macbook {m_mb.group(1)}"
+        if chip:
+            return f"{base} m{chip.group(1)}"
+        return base
+
     for pattern in MODEL_PATTERNS:
         m = re.search(pattern, t)
         if m:

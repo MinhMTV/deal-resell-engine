@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+from pathlib import Path
 from app.config import DB_PATH, MIN_SCORE
 from app.storage import (
     connect,
@@ -14,6 +15,9 @@ from app.intake import fetch_live_source, fetch_sample, load_cursors, save_curso
 from app.scoring import score_deal
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price, estimate_profit, build_provider, estimate_market_price_debug
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
 
 
 def _build_alert_key(source: str, normalized_model: str | None, url: str) -> str:
@@ -210,6 +214,107 @@ def cmd_price_check(args):
     print(json.dumps(debug, ensure_ascii=False, indent=2))
 
 
+def _load_retry_queue():
+    if not RETRY_QUEUE_PATH.exists():
+        return []
+    try:
+        return json.loads(RETRY_QUEUE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _save_retry_queue(rows):
+    RETRY_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RETRY_QUEUE_PATH.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def cmd_market_compare(args):
+    all_deals = []
+    for src in ["mydealz", "preisjaeger"]:
+        rows, err = fetch_live_source(src, stop_url=None, max_pages=args.max_pages)
+        if err:
+            print(f"WARN: {err}")
+        all_deals.extend(rows)
+
+    hits = []
+    retry_queue = []
+    checked = 0
+
+    for d in all_deals:
+        if checked >= args.max_checks:
+            break
+        price = d.get("price")
+        if price is None:
+            continue
+
+        normalized = normalize_product(d.get("title", ""))
+        model = normalized.get("normalized_model")
+        if not model:
+            continue
+
+        checked += 1
+        deal_input = {
+            "normalized_model": model,
+            "normalized_storage_gb": normalized.get("normalized_storage_gb"),
+        }
+        debug = estimate_market_price_debug(deal_input, mode="geizhals")
+        geizhals_min = debug.get("price")
+
+        best_attempt = next((a for a in debug.get("attempts", []) if a.get("price") is not None), None)
+        geizhals_link = None
+        if best_attempt and best_attempt.get("inliers"):
+            geizhals_link = best_attempt["inliers"][0].get("url")
+
+        if geizhals_min is None:
+            retry_queue.append(
+                {
+                    "source": d.get("source"),
+                    "title": d.get("title"),
+                    "url": d.get("url"),
+                    "price": price,
+                    "normalized_model": model,
+                    "normalized_storage_gb": normalized.get("normalized_storage_gb"),
+                }
+            )
+            continue
+
+        diff = round(float(geizhals_min) - float(price), 2)
+        if diff >= args.min_diff:
+            hits.append(
+                {
+                    "source": d.get("source"),
+                    "title": d.get("title"),
+                    "deal_url": d.get("url"),
+                    "deal_price": float(price),
+                    "normalized_model": model,
+                    "normalized_storage_gb": normalized.get("normalized_storage_gb"),
+                    "geizhals_min": float(geizhals_min),
+                    "geizhals_link": geizhals_link,
+                    "next_price": best_attempt.get("next_price") if best_attempt else None,
+                    "gap_to_next": best_attempt.get("gap_to_next") if best_attempt else None,
+                    "diff": diff,
+                }
+            )
+
+    _save_retry_queue(retry_queue)
+
+    hits.sort(key=lambda x: x["diff"], reverse=True)
+    if args.out == "json":
+        print(json.dumps({"checked": checked, "hits": hits, "retry_queue": len(retry_queue)}, ensure_ascii=False, indent=2))
+        return
+
+    print(f"Checked model deals: {checked}")
+    print(f"Hits >= {args.min_diff}€: {len(hits)}")
+    print(f"Retry queue entries: {len(retry_queue)}")
+    for i, h in enumerate(hits[: args.limit], 1):
+        print(
+            f"{i}. +{h['diff']}€ [{h['source']}] {h['normalized_model']} {h['normalized_storage_gb']}GB\n"
+            f"   deal: {h['deal_price']}€ -> {h['deal_url']}\n"
+            f"   geizhals_min: {h['geizhals_min']}€ -> {h['geizhals_link']}\n"
+            f"   next={h['next_price']} gap={h['gap_to_next']}"
+        )
+
+
 def main():
     p = argparse.ArgumentParser(description="Deal Resell Engine (rule-based MVP)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -239,6 +344,14 @@ def main():
     price_check.add_argument("--storage", type=int, default=None, help="Storage in GB, e.g. 256")
     price_check.add_argument("--provider", choices=["auto", "static", "ebay", "geizhals"], default="auto")
     price_check.set_defaults(func=cmd_price_check)
+
+    mcmp = sub.add_parser("market-compare")
+    mcmp.add_argument("--max-pages", type=int, default=10)
+    mcmp.add_argument("--max-checks", type=int, default=40)
+    mcmp.add_argument("--min-diff", type=float, default=20.0)
+    mcmp.add_argument("--limit", type=int, default=10)
+    mcmp.add_argument("--out", choices=["text", "json"], default="text")
+    mcmp.set_defaults(func=cmd_market_compare)
 
     profit = sub.add_parser("profit-report")
     profit.add_argument("--db", default=DB_PATH)

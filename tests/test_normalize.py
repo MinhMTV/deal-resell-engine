@@ -43,6 +43,12 @@ def test_normalize_handles_multiple_storage_mentions():
     assert row["normalized_storage_gb"] == 1024
 
 
+def test_normalize_macbook_chip_variant():
+    row = normalize_product("Apple MacBook Air 13 M4 16GB 256GB Himmelblau")
+    assert row["normalized_model"] == "macbook air m4"
+    assert row["normalized_storage_gb"] == 256
+
+
 def test_normalize_unknown_product():
     row = normalize_product("Irgendein Random Gutschein-Deal")
     assert row["normalized_brand"] is None

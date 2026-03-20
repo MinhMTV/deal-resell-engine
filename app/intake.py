@@ -43,6 +43,7 @@ def _is_probably_image_url(url: str) -> bool:
 def _parse_markdown_deals(markdown: str, source: str, stop_url: str | None = None):
     deals = []
     seen = set()
+    stop_hit = False
     for line in markdown.splitlines():
         if "/deals/" not in line:
             continue
@@ -68,6 +69,7 @@ def _parse_markdown_deals(markdown: str, source: str, stop_url: str | None = Non
             title, url = chosen[0].strip().replace("**", ""), chosen[1].strip()
 
         if stop_url and url == stop_url:
+            stop_hit = True
             break
 
         if (
@@ -93,10 +95,10 @@ def _parse_markdown_deals(markdown: str, source: str, stop_url: str | None = Non
                 "posted_at": datetime.now(timezone.utc).isoformat(),
             }
         )
-    return deals
+    return deals, stop_hit
 
 
-def fetch_live_source(source: str, stop_url: str | None = None):
+def fetch_live_source(source: str, stop_url: str | None = None, max_pages: int = 1):
     url = SOURCES[source]
 
     try:
@@ -129,12 +131,27 @@ def fetch_live_source(source: str, stop_url: str | None = None):
 
     try:
         base = "http://www.mydealz.de/deals" if source == "mydealz" else "http://www.preisjaeger.at/deals"
-        mirror = f"https://r.jina.ai/{base}"
-        r = requests.get(mirror, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code == 200:
-            deals = _parse_markdown_deals(r.text, source, stop_url=stop_url)
-            return deals, None
-        return [], f"{source}: fallback mirror HTTP {r.status_code}"
+        all_deals = []
+        seen_urls = set()
+
+        for page in range(1, max(1, int(max_pages)) + 1):
+            page_url = base if page == 1 else f"{base}?page={page}"
+            mirror = f"https://r.jina.ai/{page_url}"
+            r = requests.get(mirror, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                return all_deals, f"{source}: fallback mirror HTTP {r.status_code} on page {page}"
+
+            page_deals, stop_hit = _parse_markdown_deals(r.text, source, stop_url=stop_url)
+            for d in page_deals:
+                if d["url"] in seen_urls:
+                    continue
+                seen_urls.add(d["url"])
+                all_deals.append(d)
+
+            if stop_hit:
+                break
+
+        return all_deals, None
     except Exception as e:
         return [], f"{source}: fallback error {e}"
 

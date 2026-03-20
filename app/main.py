@@ -33,7 +33,7 @@ def cmd_ingest(args):
         cursors = load_cursors()
         for src in ["mydealz", "preisjaeger"]:
             stop_url = cursors.get(src) if args.new_only else None
-            rows, err = fetch_live_source(src, stop_url=stop_url)
+            rows, err = fetch_live_source(src, stop_url=stop_url, max_pages=args.max_pages)
             deals.extend(rows)
             if rows:
                 cursors[src] = rows[0]["url"]
@@ -219,6 +219,7 @@ def main():
     ing.add_argument("--sample", default="samples/deals_sample.json")
     ing.add_argument("--db", default=DB_PATH)
     ing.add_argument("--new-only", action="store_true", default=False)
+    ing.add_argument("--max-pages", type=int, default=1, help="Fallback pagination depth for live intake (e.g. 10)")
     ing.set_defaults(func=cmd_ingest)
 
     rep = sub.add_parser("report")

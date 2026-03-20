@@ -1,8 +1,15 @@
+import json
+import random
 import re
+import time
+from pathlib import Path
 from typing import Optional, Protocol
 
 import requests
 
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CACHE_PATH = PROJECT_ROOT / "state" / "price_cache.json"
 
 BASE_MODEL_PRICES = {
     "iphone 15": 760.0,
@@ -249,6 +256,8 @@ class StaticTableMarketPriceProvider:
 class WebSearchPriceProvider:
     """Best-effort generic provider for marketplace/listing pages via r.jina.ai mirror."""
 
+    _last_request_ts: dict[str, float] = {}
+
     def __init__(self, base_url: str, source_name: str, min_ratio: float = 0.88, max_ratio: float = 1.2):
         self.base_url = base_url.rstrip("/")
         self.source_name = source_name
@@ -260,13 +269,71 @@ class WebSearchPriceProvider:
         q = requests.utils.quote(query)
         return f"https://r.jina.ai/http://{self.base_url}/?q={q}"
 
+    def _cache_get(self, cache_key: str, ttl_seconds: int = 6 * 3600):
+        try:
+            if not CACHE_PATH.exists():
+                return None
+            obj = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+            item = obj.get(cache_key)
+            if not item:
+                return None
+            if (time.time() - float(item.get("ts", 0))) > ttl_seconds:
+                return None
+            return item.get("value")
+        except Exception:
+            return None
+
+    def _cache_set(self, cache_key: str, value):
+        try:
+            CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            data = {}
+            if CACHE_PATH.exists():
+                data = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+            data[cache_key] = {"ts": time.time(), "value": value}
+            # keep cache bounded
+            if len(data) > 500:
+                keys = sorted(data.keys(), key=lambda k: data[k].get("ts", 0), reverse=True)[:500]
+                data = {k: data[k] for k in keys}
+            CACHE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        except Exception:
+            pass
+
+    def _throttled_get(self, url: str):
+        host = self.source_name
+        now = time.time()
+        last = self._last_request_ts.get(host, 0.0)
+        min_interval = 1.2 + random.uniform(0.1, 0.5)
+        wait = min_interval - (now - last)
+        if wait > 0:
+            time.sleep(wait)
+
+        attempts = 2
+        backoff = 1.0
+        for i in range(attempts):
+            try:
+                r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+                self._last_request_ts[host] = time.time()
+                if r.status_code == 429:
+                    time.sleep(backoff + random.uniform(0.1, 0.4))
+                    backoff *= 2
+                    continue
+                return r
+            except Exception:
+                if i == attempts - 1:
+                    return None
+                time.sleep(backoff + random.uniform(0.1, 0.4))
+                backoff *= 2
+        return None
+
     def _estimate_for_query(self, query: str, deal_for_sanity: dict) -> Optional[float]:
         url = self._build_url(query)
-        try:
-            r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
-            if r.status_code != 200 or not r.text:
-                return None
-        except Exception:
+        cache_key = f"{self.source_name}:{query}"
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+        r = self._throttled_get(url)
+        if r is None or r.status_code != 200 or not r.text:
             return None
 
         if "Target URL returned error 429" in r.text or "Sicherheitsprüfung" in r.text:
@@ -291,7 +358,9 @@ class WebSearchPriceProvider:
             if ratio < self.min_ratio or ratio > self.max_ratio:
                 return None
 
-        return round(med, 2)
+        value = round(med, 2)
+        self._cache_set(cache_key, value)
+        return value
 
     def estimate(self, deal: dict) -> Optional[float]:
         query = _query_from_deal(deal)
@@ -328,11 +397,8 @@ class GeizhalsProvider(WebSearchPriceProvider):
 
         for q in _query_variants_from_deal(deal):
             for url in self._build_urls(q):
-                try:
-                    r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
-                    text = r.text if r.status_code == 200 else ""
-                except Exception:
-                    text = ""
+                r = self._throttled_get(url)
+                text = r.text if (r is not None and r.status_code == 200) else ""
 
                 variants = _extract_variant_rows(text, model=model, storage_gb=storage)
                 inliers, outliers, min_price, next_price, gap_to_next = _cluster_prices(variants, max_deviation_eur=100.0)

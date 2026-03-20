@@ -51,14 +51,22 @@ def _query_variants_from_deal(deal: dict) -> list[str]:
     storage = deal.get("normalized_storage_gb")
     if storage:
         try:
-            # Prefer exact model+storage matching for phones.
             variants.append(f"{model} {int(storage)}gb")
+            variants.append(f"{model} {int(storage)}")
         except Exception:
             pass
-    else:
-        variants.append(model)
+    variants.append(model)
 
-    # dedupe while preserving order
+    # Brand-prefixed fallbacks help with selective anti-bot/search behavior.
+    ml = model.lower()
+    if ml.startswith("pixel"):
+        if storage:
+            try:
+                variants.append(f"google {model} {int(storage)}gb")
+            except Exception:
+                pass
+        variants.append(f"google {model}")
+
     seen = set()
     out = []
     for v in variants:

@@ -41,6 +41,7 @@ python -m app.main ingest --mode sample
 python -m app.main ingest --mode live --new-only   # nur neue Deals seit letztem Poll
 python -m app.main report --min-score 55 --days 7
 python -m app.main backfill-normalization --limit 500
+python -m app.main price-check --model "galaxy s24 ultra" --storage 256 --provider auto
 python -m app.main profit-report --min-score 55 --days 7 --provider auto --min-profit 0 --min-roi 5 --sort-by profit --top 5 --out json --json-schema alert
 ```
 

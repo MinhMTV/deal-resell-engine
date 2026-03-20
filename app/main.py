@@ -13,7 +13,7 @@ from app.storage import (
 from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors
 from app.scoring import score_deal
 from app.normalize import normalize_product
-from app.market_price import estimate_market_price, estimate_profit, build_provider
+from app.market_price import estimate_market_price, estimate_profit, build_provider, estimate_market_price_debug
 
 
 def _build_alert_key(source: str, normalized_model: str | None, url: str) -> str:
@@ -201,6 +201,15 @@ def cmd_profit_report(args):
         )
 
 
+def cmd_price_check(args):
+    deal = {
+        "normalized_model": args.model,
+        "normalized_storage_gb": args.storage,
+    }
+    debug = estimate_market_price_debug(deal, mode=args.provider)
+    print(json.dumps(debug, ensure_ascii=False, indent=2))
+
+
 def main():
     p = argparse.ArgumentParser(description="Deal Resell Engine (rule-based MVP)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -223,6 +232,12 @@ def main():
     backfill.add_argument("--db", default=DB_PATH)
     backfill.add_argument("--limit", type=int, default=500)
     backfill.set_defaults(func=cmd_backfill_normalization)
+
+    price_check = sub.add_parser("price-check")
+    price_check.add_argument("--model", required=True, help="Normalized model, e.g. 'galaxy s24 ultra'")
+    price_check.add_argument("--storage", type=int, default=None, help="Storage in GB, e.g. 256")
+    price_check.add_argument("--provider", choices=["auto", "static", "ebay", "idealo", "geizhals"], default="auto")
+    price_check.set_defaults(func=cmd_price_check)
 
     profit = sub.add_parser("profit-report")
     profit.add_argument("--db", default=DB_PATH)

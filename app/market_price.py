@@ -44,10 +44,12 @@ def _query_variants_from_deal(deal: dict) -> list[str]:
     storage = deal.get("normalized_storage_gb")
     if storage:
         try:
+            # Prefer exact model+storage matching for phones.
             variants.append(f"{model} {int(storage)}gb")
         except Exception:
             pass
-    variants.append(model)
+    else:
+        variants.append(model)
 
     # dedupe while preserving order
     seen = set()
@@ -291,6 +293,50 @@ class ChainedMarketPriceProvider:
 def estimate_market_price(deal: dict, provider: MarketPriceProvider | None = None) -> Optional[float]:
     provider = provider or build_provider("auto")
     return provider.estimate(deal)
+
+
+def estimate_market_price_debug(deal: dict, mode: str = "auto") -> dict:
+    """Debug helper: returns price plus attempted source URLs for manual verification."""
+    mode = (mode or "auto").lower()
+    providers = []
+    if mode == "auto":
+        providers = [IdealoProvider(), GeizhalsProvider(), EbaySoldProvider(), StaticTableMarketPriceProvider()]
+    else:
+        providers = [build_provider(mode)]
+
+    attempts = []
+    for p in providers:
+        info = {"provider": p.__class__.__name__, "query": None, "url": None, "price": None}
+        if isinstance(p, GeizhalsProvider):
+            for q in _query_variants_from_deal(deal):
+                info_try = dict(info)
+                info_try["query"] = q
+                info_try["url"] = p._build_url(q)
+                value = p._estimate_for_query(q, deal)
+                info_try["price"] = value
+                attempts.append(info_try)
+                if value is not None:
+                    return {"price": value, "attempts": attempts}
+            continue
+
+        if isinstance(p, WebSearchPriceProvider):
+            q = _query_from_deal(deal)
+            info["query"] = q
+            info["url"] = p._build_url(q) if q else None
+            value = p.estimate(deal)
+            info["price"] = value
+            attempts.append(info)
+            if value is not None:
+                return {"price": value, "attempts": attempts}
+            continue
+
+        value = p.estimate(deal)
+        info["price"] = value
+        attempts.append(info)
+        if value is not None:
+            return {"price": value, "attempts": attempts}
+
+    return {"price": None, "attempts": attempts}
 
 
 def estimate_profit(

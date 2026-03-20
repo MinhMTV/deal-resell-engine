@@ -28,6 +28,7 @@ pip install -r requirements.txt
 - Rule-based Score vorhanden (`keyword + community + price bucket`) inkl. Reise/Flughafen-Keywords.
 - Persistenz in SQLite (`deals.db`)
 - Produktnormalisierung gestartet (Brand/Model/Storage/Color) und im DB-Schema hinterlegt
+- Storage-Normalisierung verbessert: bevorzugt echte Gerätespeicher-Werte gegenüber RAM-Matches (z. B. 16GB RAM + 512GB SSD → 512GB)
 - Modell-Erkennung erweitert um Varianten (z. B. iPhone Pro Max, Galaxy Ultra/Plus/FE)
 - Mock-Marktpreis-Adapter + erste Profit-Schätzung (Fee/Versand/Risikoabschlag) als CLI-Report verfügbar
 - Profit-Report unterstützt `--min-profit`, `--min-roi`, `--sort-by score|profit`, `--top N`, Ausgabeformat `--out text|json` und JSON-Schema `--json-schema full|alert` (alert inkl. `alert_key`, `source` + `normalized_model`)

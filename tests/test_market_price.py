@@ -11,6 +11,7 @@ from app.market_price import (
     _query_variants_from_deal,
     _extract_variant_rows,
     _cluster_prices,
+    _model_aliases,
 )
 
 
@@ -96,6 +97,12 @@ ab [€ 699,00](https://geizhals.de/samsung-galaxy-s24-s921b-ds-256gb-black-a310
     assert prices == [745.0, 749.0]
 
 
+def test_model_aliases_include_plus_and_model_code_tokens():
+    aliases = _model_aliases("galaxy s24 plus")
+    assert "s24+" in aliases
+    assert "s926" in aliases
+
+
 def test_cluster_prices_separates_outliers_by_100_eur():
     rows = [
         {"price": 745.0, "url": "a"},
@@ -103,8 +110,10 @@ def test_cluster_prices_separates_outliers_by_100_eur():
         {"price": 824.68, "url": "c"},
         {"price": 1137.97, "url": "d"},
     ]
-    inliers, outliers, med = _cluster_prices(rows, max_deviation_eur=100.0)
-    assert med == 749.0
+    inliers, outliers, min_price, next_price, gap = _cluster_prices(rows, max_deviation_eur=100.0)
+    assert min_price == 745.0
+    assert next_price == 749.0
+    assert gap == 4.0
     assert len(inliers) == 3
     assert len(outliers) == 1
     assert outliers[0]["price"] == 1137.97

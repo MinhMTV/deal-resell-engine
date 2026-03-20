@@ -137,9 +137,24 @@ def _extract_prices_near_query(text: str, query: str) -> list[float]:
     return _extract_eur_prices("\n".join(matched_chunks))
 
 
+def _model_aliases(model: str) -> list[str]:
+    m = (model or "").lower().strip()
+    aliases = {m, m.replace(" ", "-")}
+
+    if "plus" in m:
+        aliases.add(m.replace("plus", "+"))
+        aliases.add(m.replace("plus", "plus").replace(" ", ""))
+    if "galaxy s24 plus" in m:
+        aliases.update({"s24-plus", "s24+", "s926", "s926b"})
+    if "galaxy s24 ultra" in m:
+        aliases.update({"s24-ultra", "s24ultra", "s928", "s928b"})
+
+    return [a for a in aliases if a]
+
+
 def _extract_variant_rows(text: str, model: str, storage_gb: int | None = None) -> list[dict]:
     rows = []
-    model_slug = (model or "").lower().replace(" ", "-")
+    model_aliases = _model_aliases(model)
     storage_token = f"{int(storage_gb)}gb" if storage_gb else None
 
     pat = re.compile(
@@ -152,7 +167,7 @@ def _extract_variant_rows(text: str, model: str, storage_gb: int | None = None) 
         url = m.group(2)
         ul = url.lower()
 
-        if model_slug and model_slug not in ul:
+        if model_aliases and not any(alias in ul for alias in model_aliases):
             continue
         if storage_token and storage_token not in ul:
             continue
@@ -171,23 +186,26 @@ def _extract_variant_rows(text: str, model: str, storage_gb: int | None = None) 
     return list(dedup.values())
 
 
-def _cluster_prices(rows: list[dict], max_deviation_eur: float = 100.0) -> tuple[list[dict], list[dict], Optional[float]]:
+def _cluster_prices(rows: list[dict], max_deviation_eur: float = 100.0) -> tuple[list[dict], list[dict], Optional[float], Optional[float], Optional[float]]:
     if not rows:
-        return [], [], None
+        return [], [], None, None, None
 
     prices = [r["price"] for r in rows]
     center = _robust_median(prices)
     if center is None:
-        return [], rows, None
+        return [], rows, None, None, None
 
     inliers = [r for r in rows if abs(r["price"] - center) <= max_deviation_eur]
     outliers = [r for r in rows if abs(r["price"] - center) > max_deviation_eur]
 
     if not inliers:
-        return [], rows, None
+        return [], rows, None, None, None
 
-    refined = _robust_median([r["price"] for r in inliers])
-    return inliers, outliers, round(refined, 2) if refined is not None else None
+    sorted_prices = sorted(r["price"] for r in inliers)
+    min_price = round(sorted_prices[0], 2)
+    next_price = round(sorted_prices[1], 2) if len(sorted_prices) > 1 else None
+    gap_to_next = round(next_price - min_price, 2) if next_price is not None else None
+    return inliers, outliers, min_price, next_price, gap_to_next
 
 
 def _robust_median(values: list[float]) -> Optional[float]:
@@ -310,7 +328,7 @@ class GeizhalsProvider(WebSearchPriceProvider):
                 text = ""
 
             variants = _extract_variant_rows(text, model=model, storage_gb=storage)
-            inliers, outliers, med = _cluster_prices(variants, max_deviation_eur=100.0)
+            inliers, outliers, min_price, next_price, gap_to_next = _cluster_prices(variants, max_deviation_eur=100.0)
 
             attempts.append({
                 "query": q,
@@ -321,11 +339,13 @@ class GeizhalsProvider(WebSearchPriceProvider):
                 "variants": sorted(variants, key=lambda x: x["price"]),
                 "inliers": sorted(inliers, key=lambda x: x["price"]),
                 "outliers": sorted(outliers, key=lambda x: x["price"]),
-                "price": med,
+                "price": min_price,
+                "next_price": next_price,
+                "gap_to_next": gap_to_next,
             })
 
-            if med is not None:
-                return {"price": med, "attempts": attempts}
+            if min_price is not None:
+                return {"price": min_price, "attempts": attempts}
 
         return {"price": None, "attempts": attempts}
 
@@ -401,6 +421,8 @@ def estimate_market_price_debug(deal: dict, mode: str = "auto") -> dict:
                     "variants": a.get("variants"),
                     "inliers": a.get("inliers"),
                     "outliers": a.get("outliers"),
+                    "next_price": a.get("next_price"),
+                    "gap_to_next": a.get("gap_to_next"),
                 }
                 for a in g.get("attempts", [])
             )

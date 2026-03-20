@@ -35,36 +35,65 @@ def _query_from_deal(deal: dict) -> Optional[str]:
     return model
 
 
+def _parse_number(raw: str) -> Optional[float]:
+    if "," in raw and "." in raw:
+        val = raw.replace(".", "").replace(",", ".")
+    elif "," in raw:
+        tail = raw.split(",")[-1]
+        if len(tail) == 2:
+            val = raw.replace(",", ".")
+        else:
+            val = raw.replace(",", "")
+    else:
+        parts = raw.split(".")
+        if len(parts) > 1 and len(parts[-1]) == 2:
+            val = raw
+        else:
+            val = raw.replace(".", "")
+    try:
+        return float(val)
+    except Exception:
+        return None
+
+
 def _extract_eur_prices(text: str) -> list[float]:
     t = (text or "").replace("\u00a0", " ")
     prices = []
 
-    for m in re.finditer(r"(\d{1,5}(?:[\.,]\d{3})*(?:[\.,]\d{2})?)\s?€", t):
-        raw = m.group(1)
-        if "," in raw and "." in raw:
-            # Assume . as thousands and , as decimals in EU format.
-            val = raw.replace(".", "").replace(",", ".")
-        elif "," in raw:
-            # Could be decimals or thousands, infer by suffix length.
-            tail = raw.split(",")[-1]
-            if len(tail) == 2:
-                val = raw.replace(",", ".")
-            else:
-                val = raw.replace(",", "")
-        else:
-            parts = raw.split(".")
-            if len(parts) > 1 and len(parts[-1]) == 2:
-                val = raw
-            else:
-                val = raw.replace(".", "")
-        try:
-            p = float(val)
-        except Exception:
-            continue
-        if 20 <= p <= 20000:
-            prices.append(p)
+    patterns = [
+        r"(\d{1,5}(?:[\.,]\d{3})*(?:[\.,]\d{2})?)\s?€",  # 1099€ / 1.099,00 €
+        r"€\s?(\d{1,5}(?:[\.,]\d{3})*(?:[\.,]\d{2})?)",  # € 1099,00
+    ]
+    for pat in patterns:
+        for m in re.finditer(pat, t):
+            p = _parse_number(m.group(1))
+            if p is None:
+                continue
+            if 20 <= p <= 20000:
+                prices.append(p)
 
     return prices
+
+
+def _extract_prices_near_query(text: str, query: str) -> list[float]:
+    lines = text.splitlines()
+    tokens = [tok for tok in re.split(r"\s+", (query or "").lower()) if len(tok) >= 3 and tok not in {"gb", "tb"}]
+    if not tokens:
+        return _extract_eur_prices(text)
+
+    matched_chunks = []
+    for i, line in enumerate(lines):
+        l = line.lower()
+        hits = sum(1 for t in tokens if t in l)
+        if hits >= 2:
+            chunk = line
+            if i + 1 < len(lines):
+                chunk += "\n" + lines[i + 1]
+            matched_chunks.append(chunk)
+
+    if not matched_chunks:
+        return _extract_eur_prices(text)
+    return _extract_eur_prices("\n".join(matched_chunks))
 
 
 def _robust_median(values: list[float]) -> Optional[float]:
@@ -111,6 +140,7 @@ class WebSearchPriceProvider:
     def __init__(self, base_url: str, source_name: str):
         self.base_url = base_url.rstrip("/")
         self.source_name = source_name
+        self._static_guard = StaticTableMarketPriceProvider()
 
     def _build_url(self, query: str) -> str:
         q = requests.utils.quote(query)
@@ -129,7 +159,10 @@ class WebSearchPriceProvider:
         except Exception:
             return None
 
-        prices = _extract_eur_prices(r.text)
+        if "Target URL returned error 429" in r.text or "Sicherheitsprüfung" in r.text:
+            return None
+
+        prices = _extract_prices_near_query(r.text, query)
         if not prices:
             return None
 
@@ -140,7 +173,17 @@ class WebSearchPriceProvider:
             prices = prices[cut:-cut] or prices
 
         med = _robust_median(prices)
-        return round(med, 2) if med is not None else None
+        if med is None:
+            return None
+
+        # Sanity guard vs known static baseline to reduce noisy scrape matches.
+        baseline = self._static_guard.estimate(deal)
+        if baseline is not None:
+            ratio = med / baseline if baseline > 0 else 1.0
+            if ratio < 0.88 or ratio > 1.2:
+                return None
+
+        return round(med, 2)
 
 
 class IdealoProvider(WebSearchPriceProvider):

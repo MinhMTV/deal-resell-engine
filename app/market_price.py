@@ -314,38 +314,45 @@ class GeizhalsProvider(WebSearchPriceProvider):
         q = requests.utils.quote(query)
         return f"https://r.jina.ai/http://geizhals.de/?fs={q}"
 
+    def _build_urls(self, query: str) -> list[str]:
+        q = requests.utils.quote(query)
+        return [
+            f"https://r.jina.ai/http://geizhals.de/?fs={q}",
+            f"https://r.jina.ai/http://geizhals.at/?fs={q}",
+        ]
+
     def estimate_with_variants(self, deal: dict) -> dict:
         model = (deal.get("normalized_model") or "").strip().lower()
         storage = deal.get("normalized_storage_gb")
         attempts = []
 
         for q in _query_variants_from_deal(deal):
-            url = self._build_url(q)
-            try:
-                r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
-                text = r.text if r.status_code == 200 else ""
-            except Exception:
-                text = ""
+            for url in self._build_urls(q):
+                try:
+                    r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+                    text = r.text if r.status_code == 200 else ""
+                except Exception:
+                    text = ""
 
-            variants = _extract_variant_rows(text, model=model, storage_gb=storage)
-            inliers, outliers, min_price, next_price, gap_to_next = _cluster_prices(variants, max_deviation_eur=100.0)
+                variants = _extract_variant_rows(text, model=model, storage_gb=storage)
+                inliers, outliers, min_price, next_price, gap_to_next = _cluster_prices(variants, max_deviation_eur=100.0)
 
-            attempts.append({
-                "query": q,
-                "url": url,
-                "variant_count": len(variants),
-                "inlier_count": len(inliers),
-                "outlier_count": len(outliers),
-                "variants": sorted(variants, key=lambda x: x["price"]),
-                "inliers": sorted(inliers, key=lambda x: x["price"]),
-                "outliers": sorted(outliers, key=lambda x: x["price"]),
-                "price": min_price,
-                "next_price": next_price,
-                "gap_to_next": gap_to_next,
-            })
+                attempts.append({
+                    "query": q,
+                    "url": url,
+                    "variant_count": len(variants),
+                    "inlier_count": len(inliers),
+                    "outlier_count": len(outliers),
+                    "variants": sorted(variants, key=lambda x: x["price"]),
+                    "inliers": sorted(inliers, key=lambda x: x["price"]),
+                    "outliers": sorted(outliers, key=lambda x: x["price"]),
+                    "price": min_price,
+                    "next_price": next_price,
+                    "gap_to_next": gap_to_next,
+                })
 
-            if min_price is not None:
-                return {"price": min_price, "attempts": attempts}
+                if min_price is not None:
+                    return {"price": min_price, "attempts": attempts}
 
         return {"price": None, "attempts": attempts}
 

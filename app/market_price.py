@@ -165,11 +165,29 @@ def _extract_variant_rows(text: str, model: str, storage_gb: int | None = None) 
 
         rows.append({"price": round(p, 2), "url": url})
 
-    # dedupe by URL
     dedup = {}
     for r in rows:
         dedup[r["url"]] = r
     return list(dedup.values())
+
+
+def _cluster_prices(rows: list[dict], max_deviation_eur: float = 100.0) -> tuple[list[dict], list[dict], Optional[float]]:
+    if not rows:
+        return [], [], None
+
+    prices = [r["price"] for r in rows]
+    center = _robust_median(prices)
+    if center is None:
+        return [], rows, None
+
+    inliers = [r for r in rows if abs(r["price"] - center) <= max_deviation_eur]
+    outliers = [r for r in rows if abs(r["price"] - center) > max_deviation_eur]
+
+    if not inliers:
+        return [], rows, None
+
+    refined = _robust_median([r["price"] for r in inliers])
+    return inliers, outliers, round(refined, 2) if refined is not None else None
 
 
 def _robust_median(values: list[float]) -> Optional[float]:
@@ -292,14 +310,17 @@ class GeizhalsProvider(WebSearchPriceProvider):
                 text = ""
 
             variants = _extract_variant_rows(text, model=model, storage_gb=storage)
-            prices = [v["price"] for v in variants]
-            med = round(_robust_median(prices), 2) if prices else None
+            inliers, outliers, med = _cluster_prices(variants, max_deviation_eur=100.0)
 
             attempts.append({
                 "query": q,
                 "url": url,
                 "variant_count": len(variants),
-                "variants": variants,
+                "inlier_count": len(inliers),
+                "outlier_count": len(outliers),
+                "variants": sorted(variants, key=lambda x: x["price"]),
+                "inliers": sorted(inliers, key=lambda x: x["price"]),
+                "outliers": sorted(outliers, key=lambda x: x["price"]),
                 "price": med,
             })
 
@@ -375,7 +396,11 @@ def estimate_market_price_debug(deal: dict, mode: str = "auto") -> dict:
                     "url": a.get("url"),
                     "price": a.get("price"),
                     "variant_count": a.get("variant_count"),
+                    "inlier_count": a.get("inlier_count"),
+                    "outlier_count": a.get("outlier_count"),
                     "variants": a.get("variants"),
+                    "inliers": a.get("inliers"),
+                    "outliers": a.get("outliers"),
                 }
                 for a in g.get("attempts", [])
             )

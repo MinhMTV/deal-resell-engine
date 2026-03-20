@@ -33,7 +33,7 @@ pip install -r requirements.txt
 - Mock-Marktpreis-Adapter + erste Profit-Schätzung (Fee/Versand/Risikoabschlag) als CLI-Report verfügbar
 - Profit-Report unterstützt `--min-profit`, `--min-roi`, `--sort-by score|profit`, `--top N`, Ausgabeformat `--out text|json` und JSON-Schema `--json-schema full|alert` (alert inkl. `alert_key`, `source` + `normalized_model`)
 - Marktpreis-Provider erweitert: Idealo/Geizhals (best-effort via Mirror) + EbaySold-Stub + statische Fallback-Tabelle, auswählbar via `--provider auto|static|ebay|idealo|geizhals`
-- `price-check` zeigt pro Versuch Query/URL und (bei Geizhals) gefundene Modell-Varianten inkl. Links/Preisen zur manuellen Prüfung.
+- `price-check` zeigt pro Versuch Query/URL und (bei Geizhals) gefundene Modell-Varianten inkl. Links/Preisen zur manuellen Prüfung; Preis wird als Median der ähnlichen Varianten (±100€) berechnet, Ausreißer separat ausgewiesen.
 - Sample-Dataset für reproduzierbare Läufe enthalten
 
 ## Start

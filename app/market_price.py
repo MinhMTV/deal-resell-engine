@@ -399,6 +399,31 @@ class GeizhalsProvider(WebSearchPriceProvider):
             f"https://r.jina.ai/http://geizhals.at/?fs={q}",
         ]
 
+    def _fetch_live_price_from_product_url(self, product_url: str) -> Optional[float]:
+        try:
+            clean = (product_url or "").strip()
+            if not clean:
+                return None
+            mirror_url = "https://r.jina.ai/http://" + clean.replace("https://", "").replace("http://", "")
+            cache_key = f"geizhals_live:{clean}"
+            cached = self._cache_get(cache_key, ttl_seconds=2 * 3600)
+            if cached is not None:
+                return cached
+
+            r = self._throttled_get(mirror_url)
+            if r is None or r.status_code != 200 or not r.text:
+                return None
+
+            prices = [p for p in _extract_eur_prices(r.text) if 50 <= p <= 5000]
+            if not prices:
+                return None
+
+            live = round(min(prices), 2)
+            self._cache_set(cache_key, live)
+            return live
+        except Exception:
+            return None
+
     def estimate_with_variants(self, deal: dict) -> dict:
         model = (deal.get("normalized_model") or "").strip().lower()
         storage = deal.get("normalized_storage_gb")
@@ -410,7 +435,23 @@ class GeizhalsProvider(WebSearchPriceProvider):
                 text = r.text if (r is not None and r.status_code == 200) else ""
 
                 variants = _extract_variant_rows(text, model=model, storage_gb=storage)
-                inliers, outliers, min_price, next_price, gap_to_next = _cluster_prices(variants, max_deviation_eur=100.0)
+
+                # Enrich with product-page live prices for better click-time consistency.
+                enriched = []
+                for v in variants:
+                    live_price = self._fetch_live_price_from_product_url(v.get("url"))
+                    row = dict(v)
+                    row["list_price"] = v.get("price")
+                    row["live_price"] = live_price
+                    row["price"] = live_price if live_price is not None else v.get("price")
+                    row["price_delta"] = (
+                        round(row["price"] - row["list_price"], 2)
+                        if row.get("price") is not None and row.get("list_price") is not None
+                        else None
+                    )
+                    enriched.append(row)
+
+                inliers, outliers, min_price, next_price, gap_to_next = _cluster_prices(enriched, max_deviation_eur=100.0)
 
                 attempts.append({
                     "query": q,

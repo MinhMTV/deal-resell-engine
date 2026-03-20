@@ -59,14 +59,40 @@ def _normalize_space(text: str) -> str:
 
 def extract_storage_gb(title: str):
     t = (title or "").lower()
-    m = re.search(r"\b(\d{1,4})\s?(tb|gb)\b", t)
-    if not m:
+    matches = list(re.finditer(r"\b(\d{1,4})\s?(tb|gb)\b", t))
+    if not matches:
         return None
-    size = int(m.group(1))
-    unit = m.group(2)
-    if unit == "tb":
-        size *= 1024
-    return size
+
+    # Prefer capacities that look like real device storage over RAM mentions.
+    storage_context = ("ssd", "hdd", "nvme", "storage", "speicher", "rom")
+    ram_context = ("ram", "arbeitsspeicher")
+
+    scored = []
+    for m in matches:
+        size = int(m.group(1))
+        unit = m.group(2)
+        size_gb = size * 1024 if unit == "tb" else size
+
+        # Small context window around the match for lightweight heuristics.
+        start = max(0, m.start() - 18)
+        end = min(len(t), m.end() + 18)
+        window = t[start:end]
+
+        score = 0
+        if any(k in window for k in storage_context):
+            score += 3
+        if any(k in window for k in ram_context):
+            score -= 3
+
+        # Real storage for resale is usually >= 64GB for phones/laptops.
+        if size_gb >= 64:
+            score += 1
+
+        scored.append((score, size_gb))
+
+    # Highest heuristic score wins; ties break towards larger capacity.
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return scored[0][1]
 
 
 def extract_brand(title: str):

@@ -33,6 +33,16 @@ def test_normalize_galaxy_ultra_variant():
     assert row["normalized_color"] == "black"
 
 
+def test_normalize_prefers_storage_over_ram_capacity():
+    row = normalize_product("Lenovo ThinkPad 16GB RAM 512GB SSD")
+    assert row["normalized_storage_gb"] == 512
+
+
+def test_normalize_handles_multiple_storage_mentions():
+    row = normalize_product("PS5 Bundle 825GB + externe SSD 1TB")
+    assert row["normalized_storage_gb"] == 1024
+
+
 def test_normalize_unknown_product():
     row = normalize_product("Irgendein Random Gutschein-Deal")
     assert row["normalized_brand"] is None

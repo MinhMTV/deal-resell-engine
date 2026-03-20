@@ -442,6 +442,13 @@ class GeizhalsProvider(WebSearchPriceProvider):
                     live_price = self._fetch_live_price_from_product_url(v.get("url"))
                     row = dict(v)
                     row["list_price"] = v.get("price")
+
+                    # Guard: product pages may contain accessory prices; only accept plausible live drift.
+                    if live_price is not None and row.get("list_price") is not None:
+                        lp = float(row["list_price"])
+                        if live_price < lp * 0.6 or live_price > lp * 1.4:
+                            live_price = None
+
                     row["live_price"] = live_price
                     row["price"] = live_price if live_price is not None else v.get("price")
                     row["price_delta"] = (

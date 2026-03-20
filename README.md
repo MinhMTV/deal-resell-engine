@@ -25,7 +25,7 @@ pip install -r requirements.txt
 - Live-Intake robust mit Fallback + Cursor-Logik (`--new-only`) für Polling ohne Duplikat-Waste.
 - Markdown-Fallback-Parser gehärtet: Bild-/Asset-Links werden gefiltert, echte Deal-URLs priorisiert.
 - Abgelaufene Deals werden über Marker gefiltert (z. B. "abgelaufen", "expired").
-- Rule-based Score vorhanden (`keyword + community + price bucket`) inkl. Reise/Flughafen-Keywords.
+- Score-Engine v2: getrennte Logik für Travel-Deals (Ziel/Baseline/Abflugorte) und Resell-Tech-Deals (Gewinn-/Idealo-/Gebrauchtpreis-Signale).
 - Persistenz in SQLite (`deals.db`)
 - Produktnormalisierung gestartet (Brand/Model/Storage/Color) und im DB-Schema hinterlegt
 - Storage-Normalisierung verbessert: bevorzugt echte Gerätespeicher-Werte gegenüber RAM-Matches (z. B. 16GB RAM + 512GB SSD → 512GB)

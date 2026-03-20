@@ -1,4 +1,7 @@
+import re
 from typing import Optional, Protocol
+
+import requests
 
 
 BASE_MODEL_PRICES = {
@@ -16,6 +19,63 @@ BASE_MODEL_PRICES = {
 class MarketPriceProvider(Protocol):
     def estimate(self, deal: dict) -> Optional[float]:
         ...
+
+
+def _query_from_deal(deal: dict) -> Optional[str]:
+    model = (deal.get("normalized_model") or "").strip()
+    if not model:
+        return None
+
+    storage = deal.get("normalized_storage_gb")
+    if storage:
+        try:
+            return f"{model} {int(storage)}gb"
+        except Exception:
+            return model
+    return model
+
+
+def _extract_eur_prices(text: str) -> list[float]:
+    t = (text or "").replace("\u00a0", " ")
+    prices = []
+
+    for m in re.finditer(r"(\d{1,5}(?:[\.,]\d{3})*(?:[\.,]\d{2})?)\s?€", t):
+        raw = m.group(1)
+        if "," in raw and "." in raw:
+            # Assume . as thousands and , as decimals in EU format.
+            val = raw.replace(".", "").replace(",", ".")
+        elif "," in raw:
+            # Could be decimals or thousands, infer by suffix length.
+            tail = raw.split(",")[-1]
+            if len(tail) == 2:
+                val = raw.replace(",", ".")
+            else:
+                val = raw.replace(",", "")
+        else:
+            parts = raw.split(".")
+            if len(parts) > 1 and len(parts[-1]) == 2:
+                val = raw
+            else:
+                val = raw.replace(".", "")
+        try:
+            p = float(val)
+        except Exception:
+            continue
+        if 20 <= p <= 20000:
+            prices.append(p)
+
+    return prices
+
+
+def _robust_median(values: list[float]) -> Optional[float]:
+    if not values:
+        return None
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    if n % 2:
+        return s[mid]
+    return (s[mid - 1] + s[mid]) / 2.0
 
 
 class StaticTableMarketPriceProvider:
@@ -45,12 +105,58 @@ class StaticTableMarketPriceProvider:
         return round(base, 2)
 
 
+class WebSearchPriceProvider:
+    """Best-effort generic provider for marketplace/listing pages via r.jina.ai mirror."""
+
+    def __init__(self, base_url: str, source_name: str):
+        self.base_url = base_url.rstrip("/")
+        self.source_name = source_name
+
+    def _build_url(self, query: str) -> str:
+        q = requests.utils.quote(query)
+        return f"https://r.jina.ai/http://{self.base_url}/?q={q}"
+
+    def estimate(self, deal: dict) -> Optional[float]:
+        query = _query_from_deal(deal)
+        if not query:
+            return None
+
+        url = self._build_url(query)
+        try:
+            r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200 or not r.text:
+                return None
+        except Exception:
+            return None
+
+        prices = _extract_eur_prices(r.text)
+        if not prices:
+            return None
+
+        # lightweight denoise: trim top/bottom 15% when enough samples
+        prices = sorted(prices)
+        if len(prices) >= 8:
+            cut = max(1, int(len(prices) * 0.15))
+            prices = prices[cut:-cut] or prices
+
+        med = _robust_median(prices)
+        return round(med, 2) if med is not None else None
+
+
+class IdealoProvider(WebSearchPriceProvider):
+    def __init__(self):
+        super().__init__(base_url="www.idealo.de/preisvergleich/MainSearchProductCategory.html", source_name="idealo")
+
+
+class GeizhalsProvider(WebSearchPriceProvider):
+    def __init__(self):
+        super().__init__(base_url="geizhals.de", source_name="geizhals")
+
+
 class EbaySoldProvider:
     """Stub provider placeholder for future real sold-listings integration."""
 
     def estimate(self, deal: dict) -> Optional[float]:
-        # TODO: replace with real API/client integration.
-        # For now, intentionally return no estimate.
         _ = deal
         return None
 
@@ -61,8 +167,14 @@ def build_provider(mode: str = "auto") -> MarketPriceProvider:
         return StaticTableMarketPriceProvider()
     if mode == "ebay":
         return EbaySoldProvider()
+    if mode == "idealo":
+        return IdealoProvider()
+    if mode == "geizhals":
+        return GeizhalsProvider()
     if mode == "auto":
-        return ChainedMarketPriceProvider([EbaySoldProvider(), StaticTableMarketPriceProvider()])
+        return ChainedMarketPriceProvider(
+            [IdealoProvider(), GeizhalsProvider(), EbaySoldProvider(), StaticTableMarketPriceProvider()]
+        )
     raise ValueError(f"Unsupported provider mode: {mode}")
 
 

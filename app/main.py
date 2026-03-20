@@ -229,7 +229,7 @@ def main():
     profit.add_argument("--min-score", type=float, default=MIN_SCORE)
     profit.add_argument("--limit", type=int, default=10)
     profit.add_argument("--days", type=int, default=7)
-    profit.add_argument("--provider", choices=["auto", "static", "ebay"], default="auto")
+    profit.add_argument("--provider", choices=["auto", "static", "ebay", "idealo", "geizhals"], default="auto")
     profit.add_argument("--min-profit", type=float, default=0.0)
     profit.add_argument("--min-roi", type=float, default=None, help="Minimum ROI percent, e.g. 10 for 10%%")
     profit.add_argument("--sort-by", choices=["score", "profit"], default="score")

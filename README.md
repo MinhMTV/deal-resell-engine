@@ -32,7 +32,7 @@ pip install -r requirements.txt
 - Modell-Erkennung erweitert um Varianten (z. B. iPhone Pro Max, Galaxy Ultra/Plus/FE)
 - Mock-Marktpreis-Adapter + erste Profit-Schätzung (Fee/Versand/Risikoabschlag) als CLI-Report verfügbar
 - Profit-Report unterstützt `--min-profit`, `--min-roi`, `--sort-by score|profit`, `--top N`, Ausgabeformat `--out text|json` und JSON-Schema `--json-schema full|alert` (alert inkl. `alert_key`, `source` + `normalized_model`)
-- Marktpreis-Provider als austauschbares Interface vorbereitet (EbaySold-Stub + statische Fallback-Tabelle), auswählbar via `--provider auto|static|ebay`
+- Marktpreis-Provider erweitert: Idealo/Geizhals (best-effort via Mirror) + EbaySold-Stub + statische Fallback-Tabelle, auswählbar via `--provider auto|static|ebay|idealo|geizhals`
 - Sample-Dataset für reproduzierbare Läufe enthalten
 
 ## Start

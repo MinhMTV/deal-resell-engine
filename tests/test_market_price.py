@@ -8,6 +8,7 @@ from app.market_price import (
     GeizhalsProvider,
     build_provider,
     _extract_eur_prices,
+    _query_variants_from_deal,
 )
 
 
@@ -69,6 +70,12 @@ def test_extract_eur_prices_parses_common_formats():
     assert 1099.0 in prices
     assert 1299.0 in prices
     assert 899.5 in prices
+
+
+def test_query_variants_include_storage_and_model():
+    variants = _query_variants_from_deal({"normalized_model": "galaxy s24 ultra", "normalized_storage_gb": 256})
+    assert variants[0] == "galaxy s24 ultra 256gb"
+    assert variants[1] == "galaxy s24 ultra"
 
 
 def test_estimate_profit_positive_case():

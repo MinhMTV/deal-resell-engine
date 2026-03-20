@@ -35,6 +35,30 @@ def _query_from_deal(deal: dict) -> Optional[str]:
     return model
 
 
+def _query_variants_from_deal(deal: dict) -> list[str]:
+    model = (deal.get("normalized_model") or "").strip()
+    if not model:
+        return []
+
+    variants = []
+    storage = deal.get("normalized_storage_gb")
+    if storage:
+        try:
+            variants.append(f"{model} {int(storage)}gb")
+        except Exception:
+            pass
+    variants.append(model)
+
+    # dedupe while preserving order
+    seen = set()
+    out = []
+    for v in variants:
+        if v not in seen:
+            out.append(v)
+            seen.add(v)
+    return out
+
+
 def _parse_number(raw: str) -> Optional[float]:
     if "," in raw and "." in raw:
         val = raw.replace(".", "").replace(",", ".")
@@ -77,22 +101,38 @@ def _extract_eur_prices(text: str) -> list[float]:
 
 def _extract_prices_near_query(text: str, query: str) -> list[float]:
     lines = text.splitlines()
-    tokens = [tok for tok in re.split(r"\s+", (query or "").lower()) if len(tok) >= 3 and tok not in {"gb", "tb"}]
+
+    raw_tokens = [tok for tok in re.split(r"\s+", (query or "").lower()) if tok]
+    tokens = []
+    for tok in raw_tokens:
+        clean = tok.strip(" ,.;:()[]{}")
+        if clean in {"gb", "tb"}:
+            continue
+        # keep semantic words (len>=3) and model numbers like s24 / 15 / 8
+        if len(clean) >= 3 or any(ch.isdigit() for ch in clean):
+            tokens.append(clean)
+
     if not tokens:
         return _extract_eur_prices(text)
+
+    required_tokens = [t for t in tokens if any(ch.isdigit() for ch in t)]
 
     matched_chunks = []
     for i, line in enumerate(lines):
         l = line.lower()
         hits = sum(1 for t in tokens if t in l)
-        if hits >= 2:
+        has_required = True
+        if required_tokens:
+            has_required = any(t in l for t in required_tokens)
+
+        if hits >= 2 and has_required:
             chunk = line
             if i + 1 < len(lines):
                 chunk += "\n" + lines[i + 1]
             matched_chunks.append(chunk)
 
     if not matched_chunks:
-        return _extract_eur_prices(text)
+        return []
     return _extract_eur_prices("\n".join(matched_chunks))
 
 
@@ -148,11 +188,7 @@ class WebSearchPriceProvider:
         q = requests.utils.quote(query)
         return f"https://r.jina.ai/http://{self.base_url}/?q={q}"
 
-    def estimate(self, deal: dict) -> Optional[float]:
-        query = _query_from_deal(deal)
-        if not query:
-            return None
-
+    def _estimate_for_query(self, query: str, deal_for_sanity: dict) -> Optional[float]:
         url = self._build_url(query)
         try:
             r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
@@ -168,7 +204,6 @@ class WebSearchPriceProvider:
         if not prices:
             return None
 
-        # lightweight denoise: trim top/bottom 15% when enough samples
         prices = sorted(prices)
         if len(prices) >= 8:
             cut = max(1, int(len(prices) * 0.15))
@@ -178,14 +213,19 @@ class WebSearchPriceProvider:
         if med is None:
             return None
 
-        # Sanity guard vs known static baseline to reduce noisy scrape matches.
-        baseline = self._static_guard.estimate(deal)
+        baseline = self._static_guard.estimate(deal_for_sanity)
         if baseline is not None:
             ratio = med / baseline if baseline > 0 else 1.0
             if ratio < self.min_ratio or ratio > self.max_ratio:
                 return None
 
         return round(med, 2)
+
+    def estimate(self, deal: dict) -> Optional[float]:
+        query = _query_from_deal(deal)
+        if not query:
+            return None
+        return self._estimate_for_query(query, deal)
 
 
 class IdealoProvider(WebSearchPriceProvider):
@@ -196,11 +236,19 @@ class IdealoProvider(WebSearchPriceProvider):
 class GeizhalsProvider(WebSearchPriceProvider):
     def __init__(self):
         # geizhals works more reliably with `fs` search than `q` in this environment.
-        super().__init__(base_url="geizhals.de", source_name="geizhals", min_ratio=0.7, max_ratio=1.35)
+        super().__init__(base_url="geizhals.de", source_name="geizhals", min_ratio=0.72, max_ratio=1.28)
 
     def _build_url(self, query: str) -> str:
         q = requests.utils.quote(query)
         return f"https://r.jina.ai/http://geizhals.de/?fs={q}"
+
+    def estimate(self, deal: dict) -> Optional[float]:
+        # Try with storage first, then relaxed model-only query.
+        for q in _query_variants_from_deal(deal):
+            value = self._estimate_for_query(q, deal)
+            if value is not None:
+                return value
+        return None
 
 
 class EbaySoldProvider:

@@ -63,6 +63,7 @@ def _query_variants_from_deal(deal: dict) -> list[str]:
         if storage:
             try:
                 variants.append(f"google {model} {int(storage)}gb")
+                variants.append(f"google {model} {int(storage)}")
             except Exception:
                 pass
         variants.append(f"google {model}")

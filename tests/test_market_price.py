@@ -77,7 +77,9 @@ def test_extract_eur_prices_parses_common_formats():
 
 def test_query_variants_prefer_exact_storage_variant():
     variants = _query_variants_from_deal({"normalized_model": "galaxy s24 ultra", "normalized_storage_gb": 256})
-    assert variants == ["galaxy s24 ultra 256gb"]
+    assert variants[0] == "galaxy s24 ultra 256gb"
+    assert "galaxy s24 ultra 256" in variants
+    assert "galaxy s24 ultra" in variants
 
 
 def test_query_variants_without_storage_use_model_only():

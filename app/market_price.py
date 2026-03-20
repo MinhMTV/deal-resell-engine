@@ -137,9 +137,11 @@ class StaticTableMarketPriceProvider:
 class WebSearchPriceProvider:
     """Best-effort generic provider for marketplace/listing pages via r.jina.ai mirror."""
 
-    def __init__(self, base_url: str, source_name: str):
+    def __init__(self, base_url: str, source_name: str, min_ratio: float = 0.88, max_ratio: float = 1.2):
         self.base_url = base_url.rstrip("/")
         self.source_name = source_name
+        self.min_ratio = min_ratio
+        self.max_ratio = max_ratio
         self._static_guard = StaticTableMarketPriceProvider()
 
     def _build_url(self, query: str) -> str:
@@ -180,7 +182,7 @@ class WebSearchPriceProvider:
         baseline = self._static_guard.estimate(deal)
         if baseline is not None:
             ratio = med / baseline if baseline > 0 else 1.0
-            if ratio < 0.88 or ratio > 1.2:
+            if ratio < self.min_ratio or ratio > self.max_ratio:
                 return None
 
         return round(med, 2)
@@ -193,7 +195,12 @@ class IdealoProvider(WebSearchPriceProvider):
 
 class GeizhalsProvider(WebSearchPriceProvider):
     def __init__(self):
-        super().__init__(base_url="geizhals.de", source_name="geizhals")
+        # geizhals works more reliably with `fs` search than `q` in this environment.
+        super().__init__(base_url="geizhals.de", source_name="geizhals", min_ratio=0.7, max_ratio=1.35)
+
+    def _build_url(self, query: str) -> str:
+        q = requests.utils.quote(query)
+        return f"https://r.jina.ai/http://geizhals.de/?fs={q}"
 
 
 class EbaySoldProvider:

@@ -9,6 +9,7 @@ from app.market_price import (
     build_provider,
     _extract_eur_prices,
     _query_variants_from_deal,
+    _extract_variant_rows,
 )
 
 
@@ -72,10 +73,26 @@ def test_extract_eur_prices_parses_common_formats():
     assert 899.5 in prices
 
 
-def test_query_variants_include_storage_and_model():
+def test_query_variants_prefer_exact_storage_variant():
     variants = _query_variants_from_deal({"normalized_model": "galaxy s24 ultra", "normalized_storage_gb": 256})
-    assert variants[0] == "galaxy s24 ultra 256gb"
-    assert variants[1] == "galaxy s24 ultra"
+    assert variants == ["galaxy s24 ultra 256gb"]
+
+
+def test_query_variants_without_storage_use_model_only():
+    variants = _query_variants_from_deal({"normalized_model": "galaxy s24 ultra", "normalized_storage_gb": None})
+    assert variants == ["galaxy s24 ultra"]
+
+
+def test_extract_variant_rows_filters_model_and_storage():
+    text = """
+ab [€ 745,00](https://geizhals.de/samsung-galaxy-s24-ultra-s928b-ds-256gb-titanium-gray-a3105415.html#offerlist)
+ab [€ 749,00](https://geizhals.de/samsung-galaxy-s24-ultra-s928b-ds-256gb-titanium-violet-a3105426.html#offerlist)
+ab [€ 699,00](https://geizhals.de/samsung-galaxy-s24-s921b-ds-256gb-black-a3105000.html#offerlist)
+"""
+    rows = _extract_variant_rows(text, model="galaxy s24 ultra", storage_gb=256)
+    assert len(rows) == 2
+    prices = sorted(r["price"] for r in rows)
+    assert prices == [745.0, 749.0]
 
 
 def test_estimate_profit_positive_case():

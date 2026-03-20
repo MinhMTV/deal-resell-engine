@@ -110,7 +110,6 @@ def _extract_prices_near_query(text: str, query: str) -> list[float]:
         clean = tok.strip(" ,.;:()[]{}")
         if clean in {"gb", "tb"}:
             continue
-        # keep semantic words (len>=3) and model numbers like s24 / 15 / 8
         if len(clean) >= 3 or any(ch.isdigit() for ch in clean):
             tokens.append(clean)
 
@@ -136,6 +135,41 @@ def _extract_prices_near_query(text: str, query: str) -> list[float]:
     if not matched_chunks:
         return []
     return _extract_eur_prices("\n".join(matched_chunks))
+
+
+def _extract_variant_rows(text: str, model: str, storage_gb: int | None = None) -> list[dict]:
+    rows = []
+    model_slug = (model or "").lower().replace(" ", "-")
+    storage_token = f"{int(storage_gb)}gb" if storage_gb else None
+
+    pat = re.compile(
+        r"ab\s*\[€\s*(\d{1,5}(?:[\.,]\d{2})?)\]\((https?://[^\)]+)\)",
+        re.IGNORECASE,
+    )
+
+    for m in pat.finditer(text or ""):
+        raw_price = m.group(1)
+        url = m.group(2)
+        ul = url.lower()
+
+        if model_slug and model_slug not in ul:
+            continue
+        if storage_token and storage_token not in ul:
+            continue
+        if any(x in ul for x in ["case", "hülle", "schutzglas", "ladekabel", "netzteil", "cover"]):
+            continue
+
+        p = _parse_number(raw_price)
+        if p is None or not (50 <= p <= 2500):
+            continue
+
+        rows.append({"price": round(p, 2), "url": url})
+
+    # dedupe by URL
+    dedup = {}
+    for r in rows:
+        dedup[r["url"]] = r
+    return list(dedup.values())
 
 
 def _robust_median(values: list[float]) -> Optional[float]:
@@ -238,19 +272,44 @@ class IdealoProvider(WebSearchPriceProvider):
 class GeizhalsProvider(WebSearchPriceProvider):
     def __init__(self):
         # geizhals works more reliably with `fs` search than `q` in this environment.
-        super().__init__(base_url="geizhals.de", source_name="geizhals", min_ratio=0.72, max_ratio=1.28)
+        super().__init__(base_url="geizhals.de", source_name="geizhals", min_ratio=0.65, max_ratio=1.35)
 
     def _build_url(self, query: str) -> str:
         q = requests.utils.quote(query)
         return f"https://r.jina.ai/http://geizhals.de/?fs={q}"
 
-    def estimate(self, deal: dict) -> Optional[float]:
-        # Try with storage first, then relaxed model-only query.
+    def estimate_with_variants(self, deal: dict) -> dict:
+        model = (deal.get("normalized_model") or "").strip().lower()
+        storage = deal.get("normalized_storage_gb")
+        attempts = []
+
         for q in _query_variants_from_deal(deal):
-            value = self._estimate_for_query(q, deal)
-            if value is not None:
-                return value
-        return None
+            url = self._build_url(q)
+            try:
+                r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+                text = r.text if r.status_code == 200 else ""
+            except Exception:
+                text = ""
+
+            variants = _extract_variant_rows(text, model=model, storage_gb=storage)
+            prices = [v["price"] for v in variants]
+            med = round(_robust_median(prices), 2) if prices else None
+
+            attempts.append({
+                "query": q,
+                "url": url,
+                "variant_count": len(variants),
+                "variants": variants,
+                "price": med,
+            })
+
+            if med is not None:
+                return {"price": med, "attempts": attempts}
+
+        return {"price": None, "attempts": attempts}
+
+    def estimate(self, deal: dict) -> Optional[float]:
+        return self.estimate_with_variants(deal).get("price")
 
 
 class EbaySoldProvider:
@@ -308,15 +367,20 @@ def estimate_market_price_debug(deal: dict, mode: str = "auto") -> dict:
     for p in providers:
         info = {"provider": p.__class__.__name__, "query": None, "url": None, "price": None}
         if isinstance(p, GeizhalsProvider):
-            for q in _query_variants_from_deal(deal):
-                info_try = dict(info)
-                info_try["query"] = q
-                info_try["url"] = p._build_url(q)
-                value = p._estimate_for_query(q, deal)
-                info_try["price"] = value
-                attempts.append(info_try)
-                if value is not None:
-                    return {"price": value, "attempts": attempts}
+            g = p.estimate_with_variants(deal)
+            attempts.extend(
+                {
+                    "provider": p.__class__.__name__,
+                    "query": a.get("query"),
+                    "url": a.get("url"),
+                    "price": a.get("price"),
+                    "variant_count": a.get("variant_count"),
+                    "variants": a.get("variants"),
+                }
+                for a in g.get("attempts", [])
+            )
+            if g.get("price") is not None:
+                return {"price": g.get("price"), "attempts": attempts}
             continue
 
         if isinstance(p, WebSearchPriceProvider):

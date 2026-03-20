@@ -237,7 +237,7 @@ def main():
     price_check = sub.add_parser("price-check")
     price_check.add_argument("--model", required=True, help="Normalized model, e.g. 'galaxy s24 ultra'")
     price_check.add_argument("--storage", type=int, default=None, help="Storage in GB, e.g. 256")
-    price_check.add_argument("--provider", choices=["auto", "static", "ebay", "idealo", "geizhals"], default="auto")
+    price_check.add_argument("--provider", choices=["auto", "static", "ebay", "geizhals"], default="auto")
     price_check.set_defaults(func=cmd_price_check)
 
     profit = sub.add_parser("profit-report")
@@ -245,7 +245,7 @@ def main():
     profit.add_argument("--min-score", type=float, default=MIN_SCORE)
     profit.add_argument("--limit", type=int, default=10)
     profit.add_argument("--days", type=int, default=7)
-    profit.add_argument("--provider", choices=["auto", "static", "ebay", "idealo", "geizhals"], default="auto")
+    profit.add_argument("--provider", choices=["auto", "static", "ebay", "geizhals"], default="auto")
     profit.add_argument("--min-profit", type=float, default=0.0)
     profit.add_argument("--min-roi", type=float, default=None, help="Minimum ROI percent, e.g. 10 for 10%%")
     profit.add_argument("--sort-by", choices=["score", "profit"], default="score")

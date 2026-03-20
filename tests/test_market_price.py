@@ -4,7 +4,6 @@ from app.market_price import (
     estimate_profit,
     StaticTableMarketPriceProvider,
     EbaySoldProvider,
-    IdealoProvider,
     GeizhalsProvider,
     build_provider,
     _extract_eur_prices,
@@ -55,11 +54,6 @@ def test_build_provider_ebay_mode_returns_none_with_stub():
     provider = build_provider("ebay")
     deal = {"normalized_model": "iphone 15", "normalized_storage_gb": 128}
     assert provider.estimate(deal) is None
-
-
-def test_build_provider_idealo_mode():
-    provider = build_provider("idealo")
-    assert isinstance(provider, IdealoProvider)
 
 
 def test_build_provider_geizhals_mode():

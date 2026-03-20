@@ -378,11 +378,6 @@ class WebSearchPriceProvider:
         return self._estimate_for_query(query, deal)
 
 
-class IdealoProvider(WebSearchPriceProvider):
-    def __init__(self):
-        super().__init__(base_url="www.idealo.de/preisvergleich/MainSearchProductCategory.html", source_name="idealo")
-
-
 class GeizhalsProvider(WebSearchPriceProvider):
     def __init__(self):
         # geizhals works more reliably with `fs` search than `q` in this environment.
@@ -497,13 +492,11 @@ def build_provider(mode: str = "auto") -> MarketPriceProvider:
         return StaticTableMarketPriceProvider()
     if mode == "ebay":
         return EbaySoldProvider()
-    if mode == "idealo":
-        return IdealoProvider()
     if mode == "geizhals":
         return GeizhalsProvider()
     if mode == "auto":
         return ChainedMarketPriceProvider(
-            [IdealoProvider(), GeizhalsProvider(), EbaySoldProvider(), StaticTableMarketPriceProvider()]
+            [GeizhalsProvider(), EbaySoldProvider(), StaticTableMarketPriceProvider()]
         )
     raise ValueError(f"Unsupported provider mode: {mode}")
 
@@ -530,7 +523,7 @@ def estimate_market_price_debug(deal: dict, mode: str = "auto") -> dict:
     mode = (mode or "auto").lower()
     providers = []
     if mode == "auto":
-        providers = [IdealoProvider(), GeizhalsProvider(), EbaySoldProvider(), StaticTableMarketPriceProvider()]
+        providers = [GeizhalsProvider(), EbaySoldProvider(), StaticTableMarketPriceProvider()]
     else:
         providers = [build_provider(mode)]
 

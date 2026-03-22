@@ -1,5 +1,7 @@
 import json
 import re
+import time
+import random
 from pathlib import Path
 from datetime import datetime, timezone
 import requests
@@ -137,9 +139,32 @@ def fetch_live_source(source: str, stop_url: str | None = None, max_pages: int =
         for page in range(1, max(1, int(max_pages)) + 1):
             page_url = base if page == 1 else f"{base}?page={page}"
             mirror = f"https://r.jina.ai/{page_url}"
-            r = requests.get(mirror, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
-            if r.status_code != 200:
-                return all_deals, f"{source}: fallback mirror HTTP {r.status_code} on page {page}"
+
+            # Throttle: respect rate limits with jittered delay between pages
+            if page > 1:
+                time.sleep(2.0 + random.uniform(0.5, 1.5))
+
+            max_retries = 3
+            backoff = 3.0
+            r = None
+            for attempt in range(max_retries):
+                try:
+                    r = requests.get(mirror, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
+                    if r.status_code == 429:
+                        wait = backoff + random.uniform(0.5, 1.5)
+                        time.sleep(wait)
+                        backoff *= 2
+                        continue
+                    break
+                except Exception:
+                    if attempt == max_retries - 1:
+                        return all_deals, f"{source}: connection error on page {page}"
+                    time.sleep(backoff + random.uniform(0.5, 1.5))
+                    backoff *= 2
+
+            if r is None or r.status_code != 200:
+                status = r.status_code if r is not None else "no response"
+                return all_deals, f"{source}: fallback mirror HTTP {status} on page {page}"
 
             page_deals, stop_hit = _parse_markdown_deals(r.text, source, stop_url=stop_url)
             for d in page_deals:

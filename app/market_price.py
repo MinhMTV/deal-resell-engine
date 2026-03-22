@@ -168,6 +168,46 @@ def _model_aliases(model: str) -> list[str]:
     return [a for a in aliases if a]
 
 
+_ACCESSORY_KEYWORDS = [
+    "case", "hülle", "huellen", "schutzglas", "panzerglas",
+    "ladekabel", "netzteil", "ladegerät", "cover", "schutz",
+    "halsband", "schlüssel", "schluessel", "halterung", "adapter",
+    "folie", "tasche", "staubschutz", "faltschloss", "schloss",
+    "band", "armband", "reim", "dock", "station", "mount",
+]
+
+# Model → expected brand tokens in URL. If none match, it's likely a false positive.
+_MODEL_BRAND_GUARD = {
+    "airtag": ["apple"],
+    "airpods": ["apple"],
+    "iphone": ["apple"],
+    "ipad": ["apple"],
+    "macbook": ["apple"],
+    "apple watch": ["apple"],
+    "galaxy": ["samsung"],
+    "pixel": ["google"],
+    "oneplus": ["oneplus"],
+    "steam deck": ["valve", "steamdeck"],
+}
+
+
+def _is_accessory_url(url: str) -> bool:
+    ul = (url or "").lower()
+    return any(kw in ul for kw in _ACCESSORY_KEYWORDS)
+
+
+def _passes_brand_guard(url: str, model: str) -> bool:
+    """Reject URLs where the brand clearly doesn't match the expected model brand."""
+    ul = (url or "").lower()
+    ml = (model or "").lower().strip()
+    for key, expected_brands in _MODEL_BRAND_GUARD.items():
+        if key in ml:
+            if not any(b in ul for b in expected_brands):
+                return False
+            break
+    return True
+
+
 def _extract_variant_rows(text: str, model: str, storage_gb: int | None = None) -> list[dict]:
     rows = []
     model_aliases = _model_aliases(model)
@@ -187,7 +227,9 @@ def _extract_variant_rows(text: str, model: str, storage_gb: int | None = None) 
             continue
         if storage_token and storage_token not in ul:
             continue
-        if any(x in ul for x in ["case", "hülle", "schutzglas", "ladekabel", "netzteil", "cover"]):
+        if _is_accessory_url(url):
+            continue
+        if not _passes_brand_guard(url, model):
             continue
 
         p = _parse_number(raw_price)

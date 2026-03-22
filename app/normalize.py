@@ -56,8 +56,8 @@ MODEL_PATTERNS = [
     # OnePlus Pad
     r"\boneplus\s?pad\s?(?:go|pro)?\s?\d{0,2}\b",
     # Gaming consoles & handhelds
-    r"\bplaystation\s?\d\b",
-    r"\bps\d\b",
+    r"\bplaystation\s?\d(?:\s?(?:slim|digital|pro))?\b",
+    r"\bps\s?\d(?:\s?(?:slim|digital|pro))?\b",
     r"\bxbox\s?(?:series\s?[xs]|one)\b",
     r"\bswitch\s?(?:oled|lite)?\b",
     r"\bsteam\s?deck\b",

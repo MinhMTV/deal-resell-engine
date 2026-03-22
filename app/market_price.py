@@ -68,6 +68,26 @@ def _query_variants_from_deal(deal: dict) -> list[str]:
                 pass
         variants.append(f"google {model}")
 
+    # PlayStation: Geizhals uses 'ps5 slim' not 'playstation 5'
+    if "playstation" in ml or ml.startswith("ps"):
+        variants.append("ps5 slim")
+        variants.append("ps5 digital")
+        variants.append("playstation 5 slim")
+
+    # OnePlus Watch: simplify
+    if "oneplus watch" in ml:
+        variants.append("oneplus watch")
+        variants.append("oneplus watch 3 titanium")
+
+    # Galaxy S26: try with 'samsung' prefix and 'enterprise edition'
+    if "galaxy s26" in ml:
+        variants.append(f"samsung {model}")
+        if storage:
+            try:
+                variants.append(f"samsung {model} {int(storage)}gb")
+            except Exception:
+                pass
+
     seen = set()
     out = []
     for v in variants:

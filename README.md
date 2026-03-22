@@ -1,12 +1,14 @@
 # deal-resell-engine
 
 ## Ziel
-Rule-based MVP, der Deals von mydealz/preisjaeger einsammelt, nach Flip-relevanten Signalen bewertet und die besten Kandidaten ausgibt.
+Rule-based Deal-Scanner der mydealz/preisjaeger durchsucht, mit Geizhals vergleibt und profitable Deals mit Telegram-Alert-Format ausgibt.
 
 ## Tech-Stack
 - Python 3.10+
 - SQLite (lokal)
 - requests + BeautifulSoup
+- Geizhals via r.jina.ai Mirror
+- systemd Timer (automatischer Poll + Retry)
 
 ## Setup (isoliert)
 ```bash
@@ -16,44 +18,77 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Aktueller Status
-- Funktionierender MVP-Pipeline-CLI:
-  - `ingest --mode sample|live`
-  - `report --min-score --days`
-  - `backfill-normalization --limit`
-  - `profit-report --min-score --days`
-- Live-Intake robust mit Fallback + Cursor-Logik (`--new-only`) für Polling ohne Duplikat-Waste.
-- Markdown-Fallback-Parser gehärtet: Bild-/Asset-Links werden gefiltert, echte Deal-URLs priorisiert.
-- Abgelaufene Deals werden über Marker gefiltert (z. B. "abgelaufen", "expired").
-- Score-Engine v2: getrennte Logik für Travel-Deals (Ziel/Baseline/Abflugorte) und Resell-Tech-Deals (Gewinn-/Idealo-/Gebrauchtpreis-Signale).
-- Persistenz in SQLite (`deals.db`)
-- Produktnormalisierung gestartet (Brand/Model/Storage/Color) und im DB-Schema hinterlegt
-- Storage-Normalisierung verbessert: bevorzugt echte Gerätespeicher-Werte gegenüber RAM-Matches (z. B. 16GB RAM + 512GB SSD → 512GB)
-- Modell-Erkennung erweitert um Varianten (z. B. iPhone Pro Max, Galaxy Ultra/Plus/FE)
-- Mock-Marktpreis-Adapter + erste Profit-Schätzung (Fee/Versand/Risikoabschlag) als CLI-Report verfügbar
-- Profit-Report unterstützt `--min-profit`, `--min-roi`, `--sort-by score|profit`, `--top N`, Ausgabeformat `--out text|json` und JSON-Schema `--json-schema full|alert` (alert inkl. `alert_key`, `source` + `normalized_model`)
-- Marktpreis-Provider: Geizhals (best-effort via Mirror) + EbaySold-Stub + statische Fallback-Tabelle, auswählbar via `--provider auto|static|ebay|geizhals`
-- `price-check` zeigt pro Versuch Query/URL und (bei Geizhals) gefundene Modell-Varianten inkl. Links/Preisen zur manuellen Prüfung; Preis wird als günstigster Inlier (±100€-Cluster) genommen, inkl. `next_price` und `gap_to_next`, Ausreißer separat ausgewiesen.
-- Sample-Dataset für reproduzierbare Läufe enthalten
+## CLI-Befehle
 
-## Start
+### Deal-Vergleich (Hauptbefehl)
 ```bash
-python -m app.main ingest --mode sample
-python -m app.main ingest --mode live --new-only   # nur neue Deals seit letztem Poll
-python -m app.main report --min-score 55 --days 7
-python -m app.main backfill-normalization --limit 500
-python -m app.main price-check --model "galaxy s24 ultra" --storage 256 --provider auto
-python -m app.main market-compare --max-pages 10 --max-checks 40 --min-diff 20 --limit 10
+# Text-Output mit Geizhals-Daten pro Deal
+python -m app.main market-compare --max-pages 15 --max-checks 60 --min-diff 15 --limit 20 --out text
+
+# Telegram-Alert-Format (Direktkauf + Vertrags-Deals getrennt)
+python -m app.main market-compare --max-pages 15 --max-checks 60 --min-diff 15 --limit 20 --out alert
+
+# JSON-Output
+python -m app.main market-compare --max-pages 15 --max-checks 60 --min-diff 15 --limit 20 --out json
+```
+
+### Live Poll (mit Deduplikation)
+```bash
+# Automatisch — zeigt nur neue Deals die noch nicht gesendet wurden
+python scripts/live_poll.py --out alert
+
+# Reset Duplikat-Historie
+python scripts/live_poll.py --reset --out alert
+```
+
+### Retry Queue (fehlgeschlagene Geizhals-Matches)
+```bash
+python scripts/retry_queue.py --out text
+python scripts/retry_queue.py --out json --max-age 7
+```
+
+### Preis-Check (einzelnes Modell)
+```bash
+python -m app.main price-check --model "galaxy s26" --storage 512 --provider geizhals
+```
+
+### Profit Report
+```bash
 python -m app.main profit-report --min-score 55 --days 7 --provider auto --min-profit 0 --min-roi 5 --sort-by profit --top 5 --out json --json-schema alert
 ```
 
-## Hinweis zu Live-Intake
-mydealz/preisjaeger können per Cloudflare blocken (HTTP 403). Der Connector ist integriert, aber robust auf Fallback ausgelegt.
-Nächster Schritt ist ein legaler/stabiler Feed-Zugang (API/RSS-Zugang oder erlaubte Endpunkte).
+## Features
+
+### Deal-Erkennung
+- **Direktkauf-Deals**: normaler Kaufpreis
+- **Vertrags-Deals**: erkennt `X€/Monat` + `Y€ Zuzahlung`, berechnet effektiven Gesamtpreis (Zuzahlung + Monate × Monatsrate)
+- **Bundle-Deals**: markiert Deals mit Eintauschbonus, Cashback, Gutschein, Speicher-Upgrade
+
+### Geizhals-Vergleich
+- **Variant-Suche**: exakte URL-Matching mit Modell + Speicher
+- **Text-Fallback**: wenn Variant-Suche nichts findet, extrahiert Preise aus Suchergebnissen + echte Produkt-URLs
+- **Accessory-Filter**: Hülle, Case, Schutzglas, Ladekabel, Faltschloss etc. werden rausgefiltert
+- **Brand-Guard**: AirTag muss von Apple kommen, Galaxy von Samsung, Pixel von Google
+
+### Automatisierung
+- `deal-live-poll.timer`: alle 2h → Scraping + Geizhals + Dedup + Alert
+- `deal-retry-queue.timer`: alle 6h → fehlgeschlagene Geizhals-Matches nachprüfen
+
+### Normalisierte Modelle
+iPhone, Galaxy S/A/Z, Pixel, iPad, MacBook Air/Pro/Neo, Galaxy Tab, OnePlus Pad,
+PlayStation 5/Slim/Digital/Pro, PS5, Xbox, Switch, Steam Deck, ROG Ally, Legion Go,
+Apple Watch, Galaxy Watch, OnePlus Watch, AirPods, Galaxy Buds, AirTag,
+ThinkPad, Surface, XPS, Kindle, DJI, GoPro
+
+## Status
+- **43 Tests** ✅
+- **Geizhals-Provider**: Variant-Suche + Text-Fallback
+- **Live-Timer**: aktiv, erste Ausführung erfolgreich
+- **Output-Format**: Telegram-Alert mit Geizhals pro Deal
 
 ## Nächste Schritte
-1. Produktnormalisierung (Brand/Model/Storage/Color)
-2. Marktpreis-Adapter (eBay sold + Ankaufportale)
-3. Netto-Profit-Engine (Gebühren, Versand, Risikoabschlag)
-4. Telegram Alerts nur bei Score + Profit-Schwelle
-5. Vertragsmodus als eigener Parser (Einmalkosten, mtl. Kosten, Laufzeit, Boni)
+1. Weitere Normalizer-Patterns (neue Modelle beobachten)
+2. eBay Sold-Listings Integration
+3. Kleinanzeigen/Ankauf-Adapter
+4. Telegram-Integration (automatische Alerts)
+5. Multi-Quellen-Support (idealo, Amazon Preistracker)

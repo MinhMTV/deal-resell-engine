@@ -169,7 +169,7 @@ def _model_aliases(model: str) -> list[str]:
 
 
 _ACCESSORY_KEYWORDS = [
-    "case", "hülle", "huellen", "schutzglas", "panzerglas",
+    "case", "hülle", "huelle", "schutzglas", "panzerglas",
     "ladekabel", "netzteil", "ladegerät", "cover", "schutz",
     "halsband", "schlüssel", "schluessel", "halterung", "adapter",
     "folie", "tasche", "staubschutz", "faltschloss", "schloss",
@@ -187,7 +187,7 @@ _MODEL_BRAND_GUARD = {
     "galaxy": ["samsung"],
     "pixel": ["google"],
     "oneplus": ["oneplus"],
-    "steam deck": ["valve", "steamdeck"],
+    "steam deck": ["valve", "steamdeck", "steam"],
 }
 
 

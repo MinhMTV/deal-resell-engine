@@ -11,6 +11,8 @@ from app.market_price import (
     _extract_variant_rows,
     _cluster_prices,
     _model_aliases,
+    _is_accessory_url,
+    _passes_brand_guard,
 )
 
 
@@ -118,3 +120,62 @@ def test_cluster_prices_separates_outliers_by_100_eur():
 def test_estimate_profit_positive_case():
     p = estimate_profit(buy_price=699.0, market_price=900.0)
     assert p > 0
+
+
+# ── Accessory & Brand Guard Tests ──────────────────────────────────────────
+
+
+def test_is_accessory_url_detects_common_keywords():
+    assert _is_accessory_url("https://geizhals.de/spigen-case-a123.html") is True
+    assert _is_accessory_url("https://geizhals.de/huelle-fuer-iphone-a123.html") is True
+    assert _is_accessory_url("https://geizhals.de/schutzglas-a123.html") is True
+    assert _is_accessory_url("https://geizhals.de/ladekabel-a123.html") is True
+    assert _is_accessory_url("https://geizhals.de/faltschloss-airtag-a123.html") is True
+    assert _is_accessory_url("https://geizhals.de/armband-apple-watch-a123.html") is True
+    assert _is_accessory_url("https://geizhals.de/apple-iphone-16-pro-a123.html") is False
+    assert _is_accessory_url("https://geizhals.de/samsung-galaxy-s25-ultra-a123.html") is False
+
+
+def test_passes_brand_guard_apple_products():
+    # AirTag must have 'apple' in URL
+    assert _passes_brand_guard("https://geizhals.de/apple-airtag-a123.html", "airtag") is True
+    assert _passes_brand_guard("https://geizhals.de/trelock-airtag-faltschloss-a123.html", "airtag") is False
+    # iPhone
+    assert _passes_brand_guard("https://geizhals.de/apple-iphone-16-a123.html", "iphone 16") is True
+    assert _passes_brand_guard("https://geizhals.de/no-name-iphone-huelle-a123.html", "iphone 16") is False
+    # AirPods
+    assert _passes_brand_guard("https://geizhals.de/apple-airpods-pro-2-a123.html", "airpods pro") is True
+    assert _passes_brand_guard("https://geizhals.de/cheap-airpods-knockoff-a123.html", "airpods pro") is False
+
+
+def test_passes_brand_guard_samsung_products():
+    assert _passes_brand_guard("https://geizhals.de/samsung-galaxy-s25-a123.html", "galaxy s25") is True
+    assert _passes_brand_guard("https://geizhals.de/fake-galaxy-case-a123.html", "galaxy s25") is False
+
+
+def test_passes_brand_guard_pixel_products():
+    assert _passes_brand_guard("https://geizhals.de/google-pixel-9-a123.html", "pixel 9") is True
+    assert _passes_brand_guard("https://geizhals.de/fake-pixel-cover-a123.html", "pixel 9") is False
+
+
+def test_passes_brand_guard_no_guard_for_unmapped_models():
+    # Models without brand guard entry should always pass
+    assert _passes_brand_guard("https://geizhals.de/anything-a123.html", "kindle paperwhite") is True
+    assert _passes_brand_guard("https://geizhals.de/anything-a123.html", "legion go") is True
+    # Models WITH guard — must match expected brand
+    assert _passes_brand_guard("https://geizhals.de/apple-macbook-air-m5-a123.html", "macbook air m5") is True
+    assert _passes_brand_guard("https://geizhals.de/fake-macbook-a123.html", "macbook air m5") is False
+    assert _passes_brand_guard("https://geizhals.de/valve-steam-deck-oled-a123.html", "steam deck") is True
+    assert _passes_brand_guard("https://geizhals.de/fake-handheld-a123.html", "steam deck") is False
+
+
+def test_extract_variant_rows_filters_accessories_and_brand_mismatches():
+    text = """
+ab [€ 89,99](https://geizhals.de/apple-airtag-4er-pack-a2345456.html#offerlist)
+ab [€ 55,95](https://geizhals.de/trelock-fs-480-airtag-faltschloss-a3438786.html#offerlist)
+ab [€ 12,99](https://geizhals.de/cheap-airtag-case-silikon-a9999.html#offerlist)
+"""
+    rows = _extract_variant_rows(text, model="airtag", storage_gb=None)
+    assert len(rows) == 1
+    assert "apple" in rows[0]["url"]
+    assert rows[0]["price"] == 89.99

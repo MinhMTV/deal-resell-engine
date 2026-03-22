@@ -49,7 +49,7 @@ def detect_contract_deal(deal: dict) -> dict:
 
     # Extract upfront/Zuzahlung: '199€ Zuzahlung' or '559€ Zuzahlung'
     upfront = None
-    m = re.search(r"(\d{1,4})\s*(?:€|EUR)\s*(?:Zuzahlung|Anzahlung|Vorauszahlung)", title)
+    m = re.search(r"(\d{1,4})\s*(?:€|EUR)\s*(?:Zuzahlung|Anzahlung|Vorauszahlung)", title, re.IGNORECASE)
     if m:
         upfront = float(m.group(1))
 

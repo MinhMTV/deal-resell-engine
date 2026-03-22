@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from app.config import DB_PATH, MIN_SCORE
 from app.storage import (
@@ -274,6 +275,7 @@ def cmd_market_compare(args):
                     "price": price,
                     "normalized_model": model,
                     "normalized_storage_gb": normalized.get("normalized_storage_gb"),
+                    "added_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
             continue

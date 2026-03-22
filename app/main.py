@@ -12,7 +12,7 @@ from app.storage import (
     iter_deals_missing_normalization,
     update_normalization,
 )
-from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors, detect_contract_deal
+from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors, detect_contract_deal, detect_bundle_deal
 from app.scoring import score_deal
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price, estimate_profit, build_provider, estimate_market_price_debug
@@ -280,6 +280,7 @@ def cmd_market_compare(args):
 
         # Detect contract deals and extract effective pricing
         d = detect_contract_deal(d)
+        d = detect_bundle_deal(d)
         is_contract = d.get("is_contract", False)
         contract_total = d.get("contract_total")
         if is_contract and contract_total is not None:
@@ -306,6 +307,11 @@ def cmd_market_compare(args):
         geizhals_link = None
         if best_attempt and best_attempt.get("inliers"):
             geizhals_link = best_attempt["inliers"][0].get("url")
+        elif best_attempt and best_attempt.get("method") == "text_fallback":
+            geizhals_link = best_attempt.get("url")
+        # Also check for product_url in debug result (text fallback)
+        if geizhals_link is None:
+            geizhals_link = debug.get("product_url")
 
         if geizhals_min is None:
             retry_queue.append(
@@ -332,6 +338,8 @@ def cmd_market_compare(args):
                 "deal_price": float(price),
                 "effective_price": effective_price if is_contract else None,
                 "is_contract": is_contract,
+                "is_bundle": d.get("is_bundle", False),
+                "bundle_reason": d.get("bundle_reason"),
                 "contract_monthly": d.get("contract_monthly"),
                 "contract_months": d.get("contract_months"),
                 "contract_upfront": d.get("contract_upfront"),
@@ -380,8 +388,9 @@ def cmd_market_compare(args):
                 geizhals_line += f"\n   📊 nächster Preis: {h['next_price']}€ (Gap: {h['gap_to_next']}€)"
 
         tag = "📋 Vertrag | " if h.get("is_contract") else ""
+        bundle_warn = f" ⚠️ Bundle ({h['bundle_reason']})" if h.get("is_bundle") else ""
         print(
-            f"{i}. [{h['source']}] {tag}{h['normalized_model']}{storage} — {price_line}\n"
+            f"{i}. [{h['source']}] {tag}{h['normalized_model']}{storage} — {price_line}{bundle_warn}\n"
             f"   {h['deal_url']}{geizhals_line}"
         )
 
@@ -420,8 +429,9 @@ def _print_alert_format(hits: list[dict], checked: int, retry_count: int):
             emoji = _emoji_for_model(h.get("normalized_model", ""))
             storage = f" {h['normalized_storage_gb']}GB" if h.get("normalized_storage_gb") else ""
             diff_sign = "+" if h.get("diff", 0) > 0 else ""
+            bundle_warn = f" ⚠️ Bundle ({h['bundle_reason']})" if h.get("is_bundle") else ""
 
-            print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {h['deal_price']}€ [{h['source']}]")
+            print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {h['deal_price']}€ [{h['source']}]{bundle_warn}")
             print(f"   {h['deal_url']}")
             if h.get("geizhals_min") is not None:
                 print(f"   🏷️ Geizhals min: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")

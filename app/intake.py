@@ -19,6 +19,12 @@ CONTRACT_KEYWORDS = [
 ]
 CONTRACT_MONTHS_DEFAULT = 24
 
+BUNDLE_KEYWORDS = [
+    "bundle", "im bundle", "eintausch", "tauschbonus", "trade-in",
+    "gutschein", "speicher-upgrade", "zugabe", "dazu", "gratis",
+    "cashback", "rabatt auf", "% auf",
+]
+
 
 def _parse_eur_amount(text: str) -> float | None:
     """Parse '9,99' or '199' or '9.99' from text."""
@@ -74,6 +80,20 @@ def detect_contract_deal(deal: dict) -> dict:
     deal["contract_upfront"] = upfront
     deal["contract_total"] = total
 
+    return deal
+
+
+def detect_bundle_deal(deal: dict) -> dict:
+    """Detect if a deal includes bundles, trade-in bonuses, or conditional pricing."""
+    title = (deal.get("title") or "").lower()
+    if any(kw in title for kw in BUNDLE_KEYWORDS):
+        deal["is_bundle"] = True
+        # Try to find the reason
+        reasons = [kw for kw in BUNDLE_KEYWORDS if kw in title]
+        deal["bundle_reason"] = ", ".join(reasons[:3])
+    else:
+        deal["is_bundle"] = False
+        deal["bundle_reason"] = None
     return deal
 
 

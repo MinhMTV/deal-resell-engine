@@ -13,6 +13,7 @@ from app.market_price import (
     _model_aliases,
     _is_accessory_url,
     _passes_brand_guard,
+    _extract_geizhals_product_url,
 )
 
 
@@ -179,3 +180,29 @@ ab [€ 12,99](https://geizhals.de/cheap-airtag-case-silikon-a9999.html#offerlis
     assert len(rows) == 1
     assert "apple" in rows[0]["url"]
     assert rows[0]["price"] == 89.99
+
+
+# ── Geizhals Product URL Extraction ────────────────────────────────────────
+
+
+def test_extract_geizhals_product_url_finds_best_match():
+    text = """
+[Apple iPad Air 7 256GB](https://geizhals.de/apple-ipad-air-7-2025-m3-256gb-wlan-a3745123.html)
+[Samsung Galaxy Tab](https://geizhals.de/samsung-galaxy-tab-s10-a3588000.html)
+"""
+    url = _extract_geizhals_product_url(text, "ipad air 7")
+    assert url is not None
+    assert "ipad-air-7" in url
+
+
+def test_extract_geizhals_product_url_no_false_match():
+    text = """
+[Apple iPad Air 7](https://geizhals.de/apple-ipad-air-7-2025-m3-a3745123.html)
+"""
+    url = _extract_geizhals_product_url(text, "macbook air m5")
+    assert url is None
+
+
+def test_extract_geizhals_product_url_empty_text():
+    assert _extract_geizhals_product_url("", "iphone 16") is None
+    assert _extract_geizhals_product_url("no urls here", "iphone 16") is None

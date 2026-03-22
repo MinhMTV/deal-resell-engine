@@ -16,7 +16,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.intake import fetch_live_source, detect_contract_deal
+from app.intake import fetch_live_source, detect_contract_deal, detect_bundle_deal
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price_debug
 
@@ -69,6 +69,7 @@ def run_poll(max_pages: int = 15, max_checks: int = 60, min_diff: float = 15.0) 
             continue
 
         d = detect_contract_deal(d)
+        d = detect_bundle_deal(d)
         is_contract = d.get("is_contract", False)
         contract_total = d.get("contract_total")
         if is_contract and contract_total is not None:
@@ -119,6 +120,8 @@ def run_poll(max_pages: int = 15, max_checks: int = 60, min_diff: float = 15.0) 
             "deal_price": float(price),
             "effective_price": effective_price,
             "is_contract": is_contract,
+            "is_bundle": d.get("is_bundle", False),
+            "bundle_reason": d.get("bundle_reason"),
             "contract_monthly": d.get("contract_monthly"),
             "contract_months": d.get("contract_months"),
             "contract_upfront": d.get("contract_upfront"),
@@ -179,8 +182,9 @@ def print_alert(hits: list[dict]):
             emoji = _emoji_for_model(h.get("normalized_model", ""))
             storage = f" {h['normalized_storage_gb']}GB" if h.get("normalized_storage_gb") else ""
             diff_sign = "+" if h["diff"] > 0 else ""
+            bundle_warn = f" ⚠️ Bundle ({h['bundle_reason']})" if h.get("is_bundle") else ""
 
-            print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {h['deal_price']}€ [{h['source']}]")
+            print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {h['deal_price']}€ [{h['source']}]{bundle_warn}")
             print(f"   {h['deal_url']}")
             print(f"   🏷️ Geizhals: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
             if h.get("geizhals_link"):

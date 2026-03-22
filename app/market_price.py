@@ -196,6 +196,49 @@ def _is_accessory_url(url: str) -> bool:
     return any(kw in ul for kw in _ACCESSORY_KEYWORDS)
 
 
+def _extract_geizhals_product_url(text: str, model: str) -> str | None:
+    """Extract the best matching Geizhals product URL from search results text."""
+    if not text or not model:
+        return None
+
+    url_pattern = re.compile(r"https?://(?:www\.)?geizhals\.(?:de|at)/([a-z0-9\-]+-a\d+)\.html", re.IGNORECASE)
+    matches = list(url_pattern.finditer(text))
+
+    if not matches:
+        return None
+
+    model_tokens = set(re.findall(r"[a-z0-9]+", model.lower()))
+    model_tokens -= {"the", "and", "for", "mit", "und", "von"}
+
+    best_url = None
+    best_score = -1
+
+    for m in matches:
+        url = m.group(0)
+        slug = m.group(1).lower()
+        slug_tokens = set(re.findall(r"[a-z0-9]+", slug))
+
+        score = 0
+        exact_count = 0
+        for t in model_tokens:
+            if len(t) < 3:
+                continue
+            for st in slug_tokens:
+                if t == st:
+                    score += 3
+                    exact_count += 1
+                elif len(t) >= 4 and t in st:
+                    score += 1
+
+        # Require at least 2 exact matches OR 1 exact match with total score >= 5
+        if exact_count >= 2 or (exact_count >= 1 and score >= 5):
+            if score > best_score:
+                best_score = score
+                best_url = url
+
+    return best_url
+
+
 def _passes_brand_guard(url: str, model: str) -> bool:
     """Reject URLs where the brand clearly doesn't match the expected model brand."""
     ul = (url or "").lower()
@@ -528,6 +571,9 @@ class GeizhalsProvider(WebSearchPriceProvider):
                 if not text or "Target URL returned error 429" in text:
                     continue
 
+                # Extract actual Geizhals product URLs from search results
+                product_url = _extract_geizhals_product_url(text, model)
+
                 prices = _extract_eur_prices(text)
                 if not prices:
                     continue
@@ -555,8 +601,11 @@ class GeizhalsProvider(WebSearchPriceProvider):
 
                 value = round(med, 2)
                 self._cache_set(cache_key, value)
-                attempts.append({"query": q, "url": url, "method": "text_fallback", "price": value})
-                return {"price": value, "attempts": attempts}
+                fallback_url = product_url or url
+                attempts.append({"query": q, "url": fallback_url, "method": "text_fallback", "price": value})
+
+                # Also store product URL in a way the caller can access it
+                return {"price": value, "attempts": attempts, "product_url": product_url}
 
         return {"price": None, "attempts": attempts}
 

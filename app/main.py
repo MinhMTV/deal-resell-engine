@@ -281,7 +281,12 @@ def cmd_market_compare(args):
         # Detect contract deals and extract effective pricing
         d = detect_contract_deal(d)
         is_contract = d.get("is_contract", False)
-        effective_price = float(d.get("contract_total", price)) if is_contract else float(price)
+        contract_total = d.get("contract_total")
+        if is_contract and contract_total is not None:
+            effective_price = float(contract_total)
+        else:
+            effective_price = float(price)
+            is_contract = False  # no usable total → treat as direct
         compare_price = effective_price  # use effective total for Geizhals comparison
 
         normalized = normalize_product(d.get("title", ""))

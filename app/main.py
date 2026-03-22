@@ -331,20 +331,81 @@ def cmd_market_compare(args):
     _save_retry_queue(retry_queue)
 
     hits.sort(key=lambda x: x["diff"], reverse=True)
+
     if args.out == "json":
         print(json.dumps({"checked": checked, "hits": hits, "retry_queue": len(retry_queue)}, ensure_ascii=False, indent=2))
+        return
+
+    if args.out == "alert":
+        _print_alert_format(hits[: args.limit], checked, len(retry_queue))
         return
 
     print(f"Checked model deals: {checked}")
     print(f"Hits >= {args.min_diff}€: {len(hits)}")
     print(f"Retry queue entries: {len(retry_queue)}")
     for i, h in enumerate(hits[: args.limit], 1):
+        storage = f" {h['normalized_storage_gb']}GB" if h.get("normalized_storage_gb") else ""
+        geizhals_line = ""
+        if h.get("geizhals_min") is not None:
+            diff_sign = "+" if h["diff"] > 0 else ""
+            geizhals_line = f"\n   🏷️ Geizhals: {h['geizhals_min']}€ min → diff: {diff_sign}{h['diff']}€"
+            if h.get("geizhals_link"):
+                geizhals_line += f"\n   🔗 {h['geizhals_link']}"
+            if h.get("next_price"):
+                geizhals_line += f"\n   📊 nächster Preis: {h['next_price']}€ (Gap: {h['gap_to_next']}€)"
+
         print(
-            f"{i}. +{h['diff']}€ [{h['source']}] {h['normalized_model']} {h['normalized_storage_gb']}GB\n"
-            f"   deal: {h['deal_price']}€ -> {h['deal_url']}\n"
-            f"   geizhals_min: {h['geizhals_min']}€ -> {h['geizhals_link']}\n"
-            f"   next={h['next_price']} gap={h['gap_to_next']}"
+            f"{i}. +{h['diff']}€ [{h['source']}] {h['normalized_model']}{storage} — {h['deal_price']}€\n"
+            f"   {h['deal_url']}{geizhals_line}"
         )
+
+
+def _emoji_for_model(model: str) -> str:
+    m = (model or "").lower()
+    if any(k in m for k in ["iphone", "galaxy s", "pixel", "oneplus"]):
+        return "📱"
+    if any(k in m for k in ["ipad", "galaxy tab", "oneplus pad"]):
+        return "📟"
+    if any(k in m for k in ["macbook", "thinkpad", "surface", "xps"]):
+        return "💻"
+    if any(k in m for k in ["switch", "playstation", "ps5", "xbox", "steam deck", "rog ally"]):
+        return "🎮"
+    if any(k in m for k in ["airpods", "galaxy buds", "watch"]):
+        return "🎧"
+    if any(k in m for k in ["airtag"]):
+        return "📍"
+    return "🏷️"
+
+
+def _print_alert_format(hits: list[dict], checked: int, retry_count: int):
+    """Telegram-ready alert format with Geizhals data per deal."""
+    if not hits:
+        return
+
+    print(f"🔥 {len(hits)} neue Deal-Treffer gefunden ({checked} geprüft):\n")
+    for i, h in enumerate(hits, 1):
+        emoji = _emoji_for_model(h.get("normalized_model", ""))
+        storage = f" {h['normalized_storage_gb']}GB" if h.get("normalized_storage_gb") else ""
+        diff_sign = "+" if h.get("diff", 0) > 0 else ""
+
+        # Title line
+        print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {h['deal_price']}€ [{h['source']}]")
+
+        # Deal link
+        print(f"   {h['deal_url']}")
+
+        # Geizhals block
+        if h.get("geizhals_min") is not None:
+            print(f"   🏷️ Geizhals min: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
+            if h.get("geizhals_link"):
+                print(f"   🔗 {h['geizhals_link']}")
+        else:
+            print(f"   ⚠️ Geizhals: kein Match")
+
+        print()  # blank line between deals
+
+    if retry_count > 0:
+        print(f"⏳ {retry_count} Deals in Retry-Queue (Geizhals kein Match, wird nachgeprüft)")
 
 
 def main():
@@ -382,7 +443,7 @@ def main():
     mcmp.add_argument("--max-checks", type=int, default=40)
     mcmp.add_argument("--min-diff", type=float, default=20.0)
     mcmp.add_argument("--limit", type=int, default=10)
-    mcmp.add_argument("--out", choices=["text", "json"], default="text")
+    mcmp.add_argument("--out", choices=["text", "json", "alert"], default="text")
     mcmp.set_defaults(func=cmd_market_compare)
 
     profit = sub.add_parser("profit-report")

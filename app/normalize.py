@@ -41,15 +41,46 @@ COLOR_ALIASES = {
 
 
 MODEL_PATTERNS = [
+    # iPhones
     r"\biphone\s?(?:\d{1,2}|se)(?:\s?(?:pro\s?max|pro|max|plus))?\b",
+    # Samsung Galaxy S/A/Z series
     r"\bgalaxy\s?(?:s|a|z)\d{1,2}(?:\s?(?:ultra|plus|fe))?\b",
+    # Google Pixel
     r"\bpixel\s?\d{1,2}(?:\s?(?:pro|xl|a))?\b",
+    # iPads (incl. generation numbers)
     r"\bipad\s?(?:air|mini|pro)?\s?\d{0,2}\b",
-    r"\bmacbook\s?(?:air|pro)(?:\s?m\d)?\b",
+    # MacBooks (incl. M-chip gen + Neo)
+    r"\bmacbook\s?(?:air|pro|neo)(?:\s?m\d)?\b",
+    # Samsung Galaxy Tab
+    r"\bgalaxy\s?tab\s?(?:s|a)\d{0,2}(?:\s?(?:ultra|plus|fe|lite))?\b",
+    # OnePlus Pad
+    r"\boneplus\s?pad\s?(?:go|pro)?\s?\d{0,2}\b",
+    # Gaming consoles & handhelds
     r"\bplaystation\s?\d\b",
     r"\bps\d\b",
     r"\bxbox\s?(?:series\s?[xs]|one)\b",
     r"\bswitch\s?(?:oled|lite)?\b",
+    r"\bsteam\s?deck\b",
+    r"\brog\s?(?:xbox\s?)?ally\b",
+    r"\blegion\s?go\b",
+    # Smartwatches
+    r"\bapple\s?watch\s?(?:se|ultra)?\s?\d{0,2}\b",
+    r"\bgalaxy\s?watch\s?\d{0,2}(?:\s?(?:classic|ultra|pro))?\b",
+    r"\boneplus\s?watch\s?\d{0,2}\b",
+    # Audio (earbuds/headphones)
+    r"\bairpods?\s?(?:pro|max)?\s?\d{0,2}\b",
+    # Apple accessories
+    r"\bairtag\b",
+    r"\bgalaxy\s?buds?\s?(?:pro|fe)?\s?\d{0,2}\b",
+    # Laptops (ThinkPad, Surface, XPS)
+    r"\bthinkpad\s?\w{1,5}\d{0,2}\b",
+    r"\bsurface\s?(?:pro|laptop|go|studio)\s?\d{0,2}\b",
+    r"\bxps\s?\d{1,2}\b",
+    # E-readers
+    r"\bkindle\s?(?:paperwhite|scribe|oasis)?\s?\d{0,2}\b",
+    # Drones & action cams
+    r"\bdji\s?(?:mini|air|mavic|avata|neo)\s?\d{0,2}\b",
+    r"\bgopro\s?(?:hero|max)\s?\d{0,2}\b",
 ]
 
 

@@ -514,6 +514,50 @@ class GeizhalsProvider(WebSearchPriceProvider):
                 if min_price is not None:
                     return {"price": min_price, "attempts": attempts}
 
+        # Fallback: text-based search when variant extraction finds nothing
+        for q in _query_variants_from_deal(deal):
+            for url in self._build_urls(q):
+                cache_key = f"geizhals_text:{q}:{url}"
+                cached = self._cache_get(cache_key)
+                if cached is not None:
+                    attempts.append({"query": q, "url": url, "method": "text_fallback", "price": cached})
+                    return {"price": cached, "attempts": attempts}
+
+                r = self._throttled_get(url)
+                text = r.text if (r is not None and r.status_code == 200) else ""
+                if not text or "Target URL returned error 429" in text:
+                    continue
+
+                prices = _extract_eur_prices(text)
+                if not prices:
+                    continue
+
+                # Filter to plausible product prices (50-5000€)
+                prices = sorted([p for p in prices if 50 <= p <= 5000])
+                if not prices:
+                    continue
+
+                # Robust median with outlier trimming
+                if len(prices) >= 6:
+                    cut = max(1, int(len(prices) * 0.15))
+                    prices = prices[cut:-cut] or prices
+
+                med = _robust_median(prices)
+                if med is None:
+                    continue
+
+                # Sanity check against static table
+                baseline = self._static_guard.estimate(deal)
+                if baseline is not None:
+                    ratio = med / baseline if baseline > 0 else 1.0
+                    if ratio < self.min_ratio or ratio > self.max_ratio:
+                        continue
+
+                value = round(med, 2)
+                self._cache_set(cache_key, value)
+                attempts.append({"query": q, "url": url, "method": "text_fallback", "price": value})
+                return {"price": value, "attempts": attempts}
+
         return {"price": None, "attempts": attempts}
 
     def estimate(self, deal: dict) -> Optional[float]:

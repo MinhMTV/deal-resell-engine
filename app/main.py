@@ -109,7 +109,6 @@ def cmd_profit_report(args):
             print("No deals above threshold.")
         return
 
-    provider = build_provider(args.provider)
     candidates = []
 
     for r in rows:
@@ -131,9 +130,25 @@ def cmd_profit_report(args):
             "normalized_model": normalized_model,
             "normalized_storage_gb": normalized_storage_gb,
         }
-        market_price = estimate_market_price(deal, provider=provider)
+
+        # Use debug mode to get Geizhals link + details
+        debug = estimate_market_price_debug(deal, mode=args.provider)
+        market_price = debug.get("price")
         if market_price is None or price is None:
             continue
+
+        # Extract Geizhals link from debug attempts
+        geizhals_link = None
+        geizhals_min = None
+        best_attempt = next(
+            (a for a in debug.get("attempts", []) if a.get("price") is not None), None
+        )
+        if best_attempt:
+            geizhals_min = best_attempt.get("price")
+            if best_attempt.get("inliers"):
+                geizhals_link = best_attempt["inliers"][0].get("url")
+            elif best_attempt.get("url"):
+                geizhals_link = best_attempt["url"]
 
         buy_price = float(price)
         profit = estimate_profit(buy_price, market_price)
@@ -143,6 +158,8 @@ def cmd_profit_report(args):
         roi_pct = (profit / buy_price * 100.0) if buy_price > 0 else 0.0
         if args.min_roi is not None and roi_pct < args.min_roi:
             continue
+
+        diff = round(market_price - buy_price, 2) if market_price and buy_price else None
 
         candidates.append(
             {
@@ -160,6 +177,9 @@ def cmd_profit_report(args):
                 "market_price": market_price,
                 "profit": profit,
                 "roi_pct": round(roi_pct, 2),
+                "geizhals_min": geizhals_min,
+                "geizhals_link": geizhals_link,
+                "diff": diff,
             }
         )
 
@@ -191,6 +211,9 @@ def cmd_profit_report(args):
                     "profit": c["profit"],
                     "roi_pct": c["roi_pct"],
                     "score": c["score"],
+                    "geizhals_min": c.get("geizhals_min"),
+                    "geizhals_link": c.get("geizhals_link"),
+                    "diff": c.get("diff"),
                 }
                 for c in candidates
             ]
@@ -198,9 +221,16 @@ def cmd_profit_report(args):
         return
 
     for i, c in enumerate(candidates, 1):
+        geizhals_info = ""
+        if c.get("geizhals_min") is not None:
+            diff_str = f"+{c['diff']}€" if c.get("diff") and c["diff"] > 0 else f"{c.get('diff', 0)}€"
+            geizhals_info = f"\n   geizhals: {c['geizhals_min']}€ min | diff: {diff_str}"
+            if c.get("geizhals_link"):
+                geizhals_info += f" | {c['geizhals_link']}"
+
         print(
-            f"{i}. [{c['src']}] score={c['score']} buy={c['price']} market≈{c['market_price']} profit≈{c['profit']} roi≈{c['roi_pct']}% :: {c['title']}\n"
-            f"   {c['url']}\n"
+            f"{i}. [{c['src']}] score={c['score']} buy={c['price']}€ market≈{c['market_price']}€ profit≈{c['profit']}€ roi≈{c['roi_pct']}% :: {c['title']}\n"
+            f"   {c['url']}{geizhals_info}\n"
             f"   normalized: brand={c['normalized_brand']} model={c['normalized_model']} storage_gb={c['normalized_storage_gb']} color={c['normalized_color']}\n"
             f"   reasons: {c['reasons']}"
         )

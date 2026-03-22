@@ -11,6 +11,71 @@ from app.config import SOURCES, EXPIRED_MARKERS
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATE_PATH = PROJECT_ROOT / "state" / "cursors.json"
 
+CONTRACT_KEYWORDS = [
+    "monat", "/mo", "mtl", "vertrag", "tarif", "allnet", "flat",
+    "zuzahlung", "magenta", "mobilfunk", "netz",
+    "o2", "vodafone", "telekom", "otelo", "congstar", "1und1",
+    "sim only", "5g", "gb", "mobil",
+]
+CONTRACT_MONTHS_DEFAULT = 24
+
+
+def _parse_eur_amount(text: str) -> float | None:
+    """Parse '9,99' or '199' or '9.99' from text."""
+    m = re.search(r"(\d{1,5}[\.,]\d{1,2})\s*(?:€|EUR)", text)
+    if m:
+        return float(m.group(1).replace(",", "."))
+    m = re.search(r"(\d{1,5})\s*(?:€|EUR)", text)
+    if m:
+        return float(m.group(1))
+    return None
+
+
+def detect_contract_deal(deal: dict) -> dict:
+    """
+    Detect if a deal is a contract (Vertrag) deal and extract pricing.
+    Returns enriched deal dict with contract fields added.
+    """
+    title = (deal.get("title") or "").lower()
+    if not any(kw in title for kw in CONTRACT_KEYWORDS):
+        deal["is_contract"] = False
+        return deal
+
+    # Extract monthly rate: '9,99€/Monat' or '39,95€/mo' or '9,99€ mtl'
+    monthly = None
+    m = re.search(r"(\d{1,3}[\.,]\d{1,2})\s*(?:€|EUR)\s*(?:/\s*(?:Monat|mo|mtl)|\s*(?:mtl|pro\s*Monat))", title)
+    if m:
+        monthly = float(m.group(1).replace(",", "."))
+
+    # Extract upfront/Zuzahlung: '199€ Zuzahlung' or '559€ Zuzahlung'
+    upfront = None
+    m = re.search(r"(\d{1,4})\s*(?:€|EUR)\s*(?:Zuzahlung|Anzahlung|Vorauszahlung)", title)
+    if m:
+        upfront = float(m.group(1))
+
+    # Contract duration: default 24 months, check title
+    months = CONTRACT_MONTHS_DEFAULT
+    m = re.search(r"(\d{1,2})\s*(?:Monate|Monaten|months|Mo\.|Laufzeit)", title)
+    if m:
+        months = int(m.group(1))
+
+    # Calculate effective total
+    total = None
+    if upfront is not None and monthly is not None:
+        total = round(upfront + (monthly * months), 2)
+    elif monthly is not None:
+        total = round(monthly * months, 2)
+    elif upfront is not None:
+        total = upfront
+
+    deal["is_contract"] = True
+    deal["contract_monthly"] = monthly
+    deal["contract_months"] = months
+    deal["contract_upfront"] = upfront
+    deal["contract_total"] = total
+
+    return deal
+
 
 def _extract_price(text: str):
     if not text:

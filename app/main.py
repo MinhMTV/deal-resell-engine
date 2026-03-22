@@ -12,7 +12,7 @@ from app.storage import (
     iter_deals_missing_normalization,
     update_normalization,
 )
-from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors
+from app.intake import fetch_live_source, fetch_sample, load_cursors, save_cursors, detect_contract_deal
 from app.scoring import score_deal
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price, estimate_profit, build_provider, estimate_market_price_debug
@@ -278,6 +278,12 @@ def cmd_market_compare(args):
         if price is None:
             continue
 
+        # Detect contract deals and extract effective pricing
+        d = detect_contract_deal(d)
+        is_contract = d.get("is_contract", False)
+        effective_price = float(d.get("contract_total", price)) if is_contract else float(price)
+        compare_price = effective_price  # use effective total for Geizhals comparison
+
         normalized = normalize_product(d.get("title", ""))
         model = normalized.get("normalized_model")
         if not model:
@@ -305,28 +311,35 @@ def cmd_market_compare(args):
                     "price": price,
                     "normalized_model": model,
                     "normalized_storage_gb": normalized.get("normalized_storage_gb"),
+                    "is_contract": is_contract,
+                    "contract_total": d.get("contract_total"),
                     "added_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
             continue
 
-        diff = round(float(geizhals_min) - float(price), 2)
+        diff = round(float(geizhals_min) - compare_price, 2)
         if diff >= args.min_diff:
-            hits.append(
-                {
-                    "source": d.get("source"),
-                    "title": d.get("title"),
-                    "deal_url": d.get("url"),
-                    "deal_price": float(price),
-                    "normalized_model": model,
-                    "normalized_storage_gb": normalized.get("normalized_storage_gb"),
-                    "geizhals_min": float(geizhals_min),
-                    "geizhals_link": geizhals_link,
-                    "next_price": best_attempt.get("next_price") if best_attempt else None,
-                    "gap_to_next": best_attempt.get("gap_to_next") if best_attempt else None,
-                    "diff": diff,
-                }
-            )
+            hit = {
+                "source": d.get("source"),
+                "title": d.get("title"),
+                "deal_url": d.get("url"),
+                "deal_price": float(price),
+                "effective_price": effective_price if is_contract else None,
+                "is_contract": is_contract,
+                "contract_monthly": d.get("contract_monthly"),
+                "contract_months": d.get("contract_months"),
+                "contract_upfront": d.get("contract_upfront"),
+                "contract_total": d.get("contract_total"),
+                "normalized_model": model,
+                "normalized_storage_gb": normalized.get("normalized_storage_gb"),
+                "geizhals_min": float(geizhals_min),
+                "geizhals_link": geizhals_link,
+                "next_price": best_attempt.get("next_price") if best_attempt else None,
+                "gap_to_next": best_attempt.get("gap_to_next") if best_attempt else None,
+                "diff": diff,
+            }
+            hits.append(hit)
 
     _save_retry_queue(retry_queue)
 
@@ -345,6 +358,13 @@ def cmd_market_compare(args):
     print(f"Retry queue entries: {len(retry_queue)}")
     for i, h in enumerate(hits[: args.limit], 1):
         storage = f" {h['normalized_storage_gb']}GB" if h.get("normalized_storage_gb") else ""
+
+        # Price display
+        if h.get("is_contract"):
+            price_line = f"eff. {h['contract_total']}€ ({h['contract_upfront']}€ + {h['contract_months']}×{h['contract_monthly']}€/mo)"
+        else:
+            price_line = f"{h['deal_price']}€"
+
         geizhals_line = ""
         if h.get("geizhals_min") is not None:
             diff_sign = "+" if h["diff"] > 0 else ""
@@ -354,8 +374,9 @@ def cmd_market_compare(args):
             if h.get("next_price"):
                 geizhals_line += f"\n   📊 nächster Preis: {h['next_price']}€ (Gap: {h['gap_to_next']}€)"
 
+        tag = "📋 Vertrag | " if h.get("is_contract") else ""
         print(
-            f"{i}. +{h['diff']}€ [{h['source']}] {h['normalized_model']}{storage} — {h['deal_price']}€\n"
+            f"{i}. [{h['source']}] {tag}{h['normalized_model']}{storage} — {price_line}\n"
             f"   {h['deal_url']}{geizhals_line}"
         )
 
@@ -382,27 +403,52 @@ def _print_alert_format(hits: list[dict], checked: int, retry_count: int):
     if not hits:
         return
 
+    # Split into contract and non-contract
+    contract_hits = [h for h in hits if h.get("is_contract")]
+    direct_hits = [h for h in hits if not h.get("is_contract")]
+
     print(f"🔥 {len(hits)} neue Deal-Treffer gefunden ({checked} geprüft):\n")
-    for i, h in enumerate(hits, 1):
-        emoji = _emoji_for_model(h.get("normalized_model", ""))
-        storage = f" {h['normalized_storage_gb']}GB" if h.get("normalized_storage_gb") else ""
-        diff_sign = "+" if h.get("diff", 0) > 0 else ""
 
-        # Title line
-        print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {h['deal_price']}€ [{h['source']}]")
+    if direct_hits:
+        print("📦 **Direktkauf-Deals:**\n")
+        for i, h in enumerate(direct_hits, 1):
+            emoji = _emoji_for_model(h.get("normalized_model", ""))
+            storage = f" {h['normalized_storage_gb']}GB" if h.get("normalized_storage_gb") else ""
+            diff_sign = "+" if h.get("diff", 0) > 0 else ""
 
-        # Deal link
-        print(f"   {h['deal_url']}")
+            print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {h['deal_price']}€ [{h['source']}]")
+            print(f"   {h['deal_url']}")
+            if h.get("geizhals_min") is not None:
+                print(f"   🏷️ Geizhals min: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
+                if h.get("geizhals_link"):
+                    print(f"   🔗 {h['geizhals_link']}")
+            else:
+                print(f"   ⚠️ Geizhals: kein Match")
+            print()
 
-        # Geizhals block
-        if h.get("geizhals_min") is not None:
-            print(f"   🏷️ Geizhals min: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
-            if h.get("geizhals_link"):
-                print(f"   🔗 {h['geizhals_link']}")
-        else:
-            print(f"   ⚠️ Geizhals: kein Match")
+    if contract_hits:
+        print("📋 **Vertrags-Deals (eff. Gesamtpreis):**\n")
+        for i, h in enumerate(contract_hits, 1):
+            emoji = _emoji_for_model(h.get("normalized_model", ""))
+            storage = f" {h['normalized_storage_gb']}GB" if h.get("normalized_storage_gb") else ""
+            diff_sign = "+" if h.get("diff", 0) > 0 else ""
 
-        print()  # blank line between deals
+            monthly = h.get("contract_monthly")
+            months = h.get("contract_months")
+            upfront = h.get("contract_upfront")
+            total = h.get("contract_total")
+
+            price_detail = f"{upfront}€ + {months}×{monthly}€/mo = {total}€ eff." if all([upfront, monthly, months, total]) else f"eff. {total}€"
+
+            print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {price_detail} [{h['source']}]")
+            print(f"   {h['deal_url']}")
+            if h.get("geizhals_min") is not None:
+                print(f"   🏷️ Geizhals min: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
+                if h.get("geizhals_link"):
+                    print(f"   🔗 {h['geizhals_link']}")
+            else:
+                print(f"   ⚠️ Geizhals: kein Match")
+            print()
 
     if retry_count > 0:
         print(f"⏳ {retry_count} Deals in Retry-Queue (Geizhals kein Match, wird nachgeprüft)")

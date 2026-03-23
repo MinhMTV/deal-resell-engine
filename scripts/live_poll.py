@@ -19,6 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.intake import fetch_live_source, detect_contract_deal, detect_bundle_deal
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price_debug
+from app.profit import calculate_best_platform, format_profit_line
 
 SENT_PATH = PROJECT_ROOT / "state" / "sent_deals.json"
 
@@ -112,6 +113,8 @@ def run_poll(max_pages: int = 15, max_checks: int = 60, min_diff: float = 15.0) 
         if diff < min_diff:
             continue
 
+        best_profit = calculate_best_platform(effective_price, float(geizhals_min))
+
         hit = {
             "alert_key": key,
             "source": d.get("source"),
@@ -131,6 +134,10 @@ def run_poll(max_pages: int = 15, max_checks: int = 60, min_diff: float = 15.0) 
             "geizhals_min": float(geizhals_min),
             "geizhals_link": geizhals_link,
             "diff": diff,
+            "net_profit": best_profit["net_profit"],
+            "net_roi_pct": best_profit["roi_pct"],
+            "net_platform": best_profit["platform"],
+            "profit_detail": format_profit_line(best_profit),
             "found_at": now.isoformat(),
         }
         new_hits.append(hit)
@@ -189,6 +196,8 @@ def print_alert(hits: list[dict]):
             print(f"   🏷️ Geizhals: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
             if h.get("geizhals_link"):
                 print(f"   🔗 {h['geizhals_link']}")
+            if h.get("profit_detail"):
+                print(f"   💰 {h['profit_detail']}")
             print()
 
     if contract:

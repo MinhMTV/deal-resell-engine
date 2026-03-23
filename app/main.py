@@ -16,6 +16,7 @@ from app.intake import fetch_live_source, fetch_sample, load_cursors, save_curso
 from app.scoring import score_deal
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price, estimate_profit, build_provider, estimate_market_price_debug
+from app.profit import calculate_best_platform, format_profit_line
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -331,6 +332,9 @@ def cmd_market_compare(args):
 
         diff = round(float(geizhals_min) - compare_price, 2)
         if diff >= args.min_diff:
+            # Calculate best net profit across platforms
+            best_profit = calculate_best_platform(compare_price, float(geizhals_min))
+
             hit = {
                 "source": d.get("source"),
                 "title": d.get("title"),
@@ -351,6 +355,10 @@ def cmd_market_compare(args):
                 "next_price": best_attempt.get("next_price") if best_attempt else None,
                 "gap_to_next": best_attempt.get("gap_to_next") if best_attempt else None,
                 "diff": diff,
+                "net_profit": best_profit["net_profit"],
+                "net_roi_pct": best_profit["roi_pct"],
+                "net_platform": best_profit["platform"],
+                "profit_detail": format_profit_line(best_profit),
             }
             hits.append(hit)
 
@@ -389,9 +397,10 @@ def cmd_market_compare(args):
 
         tag = "📋 Vertrag | " if h.get("is_contract") else ""
         bundle_warn = f" ⚠️ Bundle ({h['bundle_reason']})" if h.get("is_bundle") else ""
+        profit_line = f"\n   💰 {h['profit_detail']}" if h.get("profit_detail") else ""
         print(
             f"{i}. [{h['source']}] {tag}{h['normalized_model']}{storage} — {price_line}{bundle_warn}\n"
-            f"   {h['deal_url']}{geizhals_line}"
+            f"   {h['deal_url']}{geizhals_line}{profit_line}"
         )
 
 
@@ -437,6 +446,8 @@ def _print_alert_format(hits: list[dict], checked: int, retry_count: int):
                 print(f"   🏷️ Geizhals min: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
                 if h.get("geizhals_link"):
                     print(f"   🔗 {h['geizhals_link']}")
+            if h.get("profit_detail"):
+                print(f"   💰 {h['profit_detail']}")
             else:
                 print(f"   ⚠️ Geizhals: kein Match")
             print()

@@ -9,6 +9,7 @@ State file: state/sent_deals.json (list of seen alert_keys)
 import argparse
 import hashlib
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,9 +28,24 @@ from app.trend_predict import predict_trend
 SENT_PATH = PROJECT_ROOT / "state" / "sent_deals.json"
 
 
+def _normalize_url(url: str) -> str:
+    """Normalize URL for consistent deduplication across runs."""
+    u = (url or "").strip().lower()
+    # Strip protocol
+    u = re.sub(r"^https?://", "", u)
+    # Strip www
+    u = re.sub(r"^www\.", "", u)
+    # Strip trailing slash
+    u = u.rstrip("/")
+    # Strip query params and fragments
+    u = u.split("?")[0].split("#")[0]
+    return u
+
+
 def _alert_key(source: str, model: str | None, url: str) -> str:
     m = model or "unknown"
-    h = hashlib.sha1((url or "").encode()).hexdigest()[:10]
+    normalized = _normalize_url(url)
+    h = hashlib.sha1(normalized.encode()).hexdigest()[:12]
     return f"{source}:{m}:{h}"
 
 

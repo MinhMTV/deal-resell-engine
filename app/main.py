@@ -18,6 +18,7 @@ from app.normalize import normalize_product
 from app.market_price import estimate_market_price, estimate_profit, build_provider, estimate_market_price_debug
 from app.profit import calculate_best_platform, format_profit_line
 from app.price_history import log_price, get_price_stats, format_price_trend
+from app.scoring_v2 import calculate_deal_score, format_score_line
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -380,6 +381,8 @@ def cmd_market_compare(args):
                 "net_platform": best_profit["platform"],
                 "profit_detail": format_profit_line(best_profit),
             }
+            # Calculate quality score
+            hit["deal_score"] = calculate_deal_score(hit)
             hits.append(hit)
 
     _save_retry_queue(retry_queue)
@@ -461,6 +464,8 @@ def _print_alert_format(hits: list[dict], checked: int, retry_count: int):
             bundle_warn = f" ⚠️ Bundle ({h['bundle_reason']})" if h.get("is_bundle") else ""
 
             print(f"{i}. {emoji} {h['normalized_model'].title()}{storage} — {h['deal_price']}€ [{h['source']}]{bundle_warn}")
+            if h.get("deal_score"):
+                print(f"   {format_score_line(h['deal_score'])}")
             print(f"   {h['deal_url']}")
             if h.get("geizhals_min") is not None:
                 print(f"   🏷️ Geizhals min: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")

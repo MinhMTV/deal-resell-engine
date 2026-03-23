@@ -73,6 +73,15 @@ python -m app.main trend --model "iphone 16" --days 14 --ahead 14
 python -m app.main trend --out json
 ```
 
+### Daily Report
+```bash
+# Kombinierter Tagesbericht: Trends + Pipeline + Preisbewegungen
+python -m app.main daily-report
+
+# JSON Output
+python -m app.main daily-report --out json
+```
+
 ### Retry Queue
 ```bash
 python scripts/retry_queue.py --out text
@@ -120,6 +129,13 @@ python -m app.main price-check --model "galaxy s26" --storage 512 --provider gei
 - **Konfidenz**: 🟢 Hoch / 🟡 Mittel / 🔴 Niedrig basierend auf Datenmenge + R²
 - **Kaufempfehlung**: "Warten wenn Preis fällt", "Jetzt kaufen wenn Preis steigt"
 - **Daily Summary**: Trend-Prognosen im Tagesbericht integriert
+
+### Daily Report
+- **Kombiniert**: Trends + Pipeline-Stats + Preisbewegungen in einem Bericht
+- **Pipeline-Integration**: Zeigt 7-Tage Deal-Pipeline Status (gefunden/benachrichtigt/gekauft/verkauft)
+- **Conversion-Raten**: Wie viele Deals → Benachrichtigung → Kauf
+- **Top Deal Highlight**: Bester Deal der Woche nach Netto-Profit
+- **JSON-Mode**: Strukturierte Daten für Automation
 - Risk (-15): Vertrag, Bundle, unrealistische Ratios
 - Rating: 🔥 EXZELLENT / ✅ GUT / ⚠️ OK / ⚠️ RISIKO / ❌ SCHLECHT
 

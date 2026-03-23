@@ -32,6 +32,7 @@ from app.deal_tracker import (
     format_deal_detail,
 )
 from app.trend_predict import predict_trend, get_all_trends, format_trend_prediction, format_trends_summary
+from app.daily_summary import generate_daily_summary, generate_daily_summary_json
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -612,6 +613,14 @@ def cmd_trend(args):
             print(format_trends_summary(trends))
 
 
+def cmd_daily_report(args):
+    if args.out == "json":
+        data = generate_daily_summary_json()
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        print(generate_daily_summary())
+
+
 def main():
     p = argparse.ArgumentParser(description="Deal Resell Engine (rule-based MVP)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -699,6 +708,11 @@ def main():
     trend.add_argument("--ahead", type=int, default=7, help="Days ahead to predict")
     trend.add_argument("--out", choices=["text", "json"], default="text")
     trend.set_defaults(func=cmd_trend)
+
+    # Daily report
+    daily = sub.add_parser("daily-report", help="Combined daily overview: trends + pipeline + price movements")
+    daily.add_argument("--out", choices=["text", "json"], default="text")
+    daily.set_defaults(func=cmd_daily_report)
 
     args = p.parse_args()
     args.func(args)

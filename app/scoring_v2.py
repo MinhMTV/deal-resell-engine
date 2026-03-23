@@ -4,8 +4,11 @@ Score components (0-100):
 - Profit Score (0-40): based on net profit margin
 - Reliability Score (0-25): based on Geizhals match quality
 - Market Position Score (0-20): how far below market the deal is
+- Trend Score (-10 to +5): price trend bonus/penalty
 - Risk Score (0-15): penalty for bundles, contracts, unverified sources
 """
+
+from app.trend_predict import predict_trend
 
 
 def calculate_deal_score(deal: dict) -> dict:
@@ -22,6 +25,7 @@ def calculate_deal_score(deal: dict) -> dict:
     - is_bundle: bool
     - geizhals_link: str (has Geizhals product link = more reliable)
     - source: str (mydealz/preisjaeger)
+    - normalized_model: str (for trend lookup)
     """
 
     scores = {}
@@ -85,7 +89,26 @@ def calculate_deal_score(deal: dict) -> dict:
 
     scores["market_position"] = round(market_points, 1)
 
-    # 4. Risk Penalty (0-15 points, subtracted from base)
+    # 4. Trend Score (-10 to +5 points)
+    trend_points = 0.0
+    model = deal.get("normalized_model")
+    if model:
+        trend = predict_trend(model, days=30)
+        if trend and trend["confidence"] in ("high", "medium"):
+            if trend["trend"] == "rising":
+                trend_points = 5.0  # prices rising = good time to buy
+            elif trend["trend"] == "dropping":
+                trend_points = -10.0  # prices dropping = wait or risk
+            # stable = 0 points (neutral)
+        elif trend and trend["confidence"] == "low":
+            if trend["trend"] == "rising":
+                trend_points = 2.0
+            elif trend["trend"] == "dropping":
+                trend_points = -5.0
+
+    scores["trend"] = round(trend_points, 1)
+
+    # 5. Risk Penalty (0-15 points, subtracted from base)
     risk_penalty = 0.0
 
     if deal.get("is_contract"):
@@ -101,7 +124,7 @@ def calculate_deal_score(deal: dict) -> dict:
     scores["risk_penalty"] = round(min(15.0, risk_penalty), 1)
 
     # Total Score
-    total = scores["profit"] + scores["reliability"] + scores["market_position"] - scores["risk_penalty"]
+    total = scores["profit"] + scores["reliability"] + scores["market_position"] + scores["trend"] - scores["risk_penalty"]
     scores["total"] = round(max(0, min(100, total)), 1)
 
     # Rating
@@ -121,8 +144,9 @@ def calculate_deal_score(deal: dict) -> dict:
 
 def format_score_line(scores: dict) -> str:
     """Format score as a readable line."""
+    trend_str = f" | Trend: {scores['trend']:+.1f}" if scores.get("trend") else ""
     return (
         f"{scores['rating']} | Score: {scores['total']}/100 | "
         f"Profit: {scores['profit']} | Reliability: {scores['reliability']} | "
-        f"Market: {scores['market_position']} | Risk: -{scores['risk_penalty']}"
+        f"Market: {scores['market_position']}{trend_str} | Risk: -{scores['risk_penalty']}"
     )

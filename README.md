@@ -1,16 +1,17 @@
 # deal-resell-engine
 
 ## Ziel
-Rule-based Deal-Scanner der mydealz/preisjaeger durchsucht, mit Geizhals vergleibt und profitable Deals mit Telegram-Alert-Format ausgibt.
+Intelligenter Deal-Scanner: mydealz/preisjaeger → Geizhals + Amazon Vergleich → Netto-Profit → Telegram-Alert mit Quality Score.
 
 ## Tech-Stack
 - Python 3.10+
 - SQLite (lokal)
 - requests + BeautifulSoup
 - Geizhals via r.jina.ai Mirror
+- Amazon.de via Jina Search
 - systemd Timer (automatischer Poll + Retry)
 
-## Setup (isoliert)
+## Setup
 ```bash
 cd /home/ubuntu/projects/deal-resell-engine
 python3 -m venv .venv
@@ -22,29 +23,31 @@ pip install -r requirements.txt
 
 ### Deal-Vergleich (Hauptbefehl)
 ```bash
-# Text-Output mit Geizhals-Daten pro Deal
+# Mit Geizhals + Amazon + Quality Score + Netto-Profit
 python -m app.main market-compare --max-pages 15 --max-checks 60 --min-diff 15 --limit 20 --out text
 
-# Telegram-Alert-Format (Direktkauf + Vertrags-Deals getrennt)
-python -m app.main market-compare --max-pages 15 --max-checks 60 --min-diff 15 --limit 20 --out alert
+# Telegram-Alert-Format
+python -m app.main market-compare --out alert
 
-# JSON-Output
-python -m app.main market-compare --max-pages 15 --max-checks 60 --min-diff 15 --limit 20 --out json
+# JSON
+python -m app.main market-compare --out json
 ```
 
-### Live Poll (mit Deduplikation)
+### Live Poll (automatisch, mit Dedup)
 ```bash
-# Automatisch — zeigt nur neue Deals die noch nicht gesendet wurden
 python scripts/live_poll.py --out alert
-
-# Reset Duplikat-Historie
-python scripts/live_poll.py --reset --out alert
+python scripts/live_poll.py --reset --out alert  # Reset Historie
 ```
 
-### Retry Queue (fehlgeschlagene Geizhals-Matches)
+### Price History
+```bash
+python -m app.main price-history                 # Alle Modelle
+python -m app.main price-history --model "galaxy s26"  # Ein Modell
+```
+
+### Retry Queue
 ```bash
 python scripts/retry_queue.py --out text
-python scripts/retry_queue.py --out json --max-age 7
 ```
 
 ### Preis-Check (einzelnes Modell)
@@ -52,43 +55,45 @@ python scripts/retry_queue.py --out json --max-age 7
 python -m app.main price-check --model "galaxy s26" --storage 512 --provider geizhals
 ```
 
-### Profit Report
-```bash
-python -m app.main profit-report --min-score 55 --days 7 --provider auto --min-profit 0 --min-roi 5 --sort-by profit --top 5 --out json --json-schema alert
-```
-
 ## Features
 
 ### Deal-Erkennung
-- **Direktkauf-Deals**: normaler Kaufpreis
-- **Vertrags-Deals**: erkennt `X€/Monat` + `Y€ Zuzahlung`, berechnet effektiven Gesamtpreis (Zuzahlung + Monate × Monatsrate)
-- **Bundle-Deals**: markiert Deals mit Eintauschbonus, Cashback, Gutschein, Speicher-Upgrade
+- **Direktkauf**: normaler Kaufpreis
+- **Vertrag**: eff. Gesamtpreis (Zuzahlung + Monate × Monatsrate)
+- **Bundle**: markiert Eintausch, Cashback, Gutschein
 
-### Geizhals-Vergleich
-- **Variant-Suche**: exakte URL-Matching mit Modell + Speicher
-- **Text-Fallback**: wenn Variant-Suche nichts findet, extrahiert Preise aus Suchergebnissen + echte Produkt-URLs
-- **Accessory-Filter**: Hülle, Case, Schutzglas, Ladekabel, Faltschloss etc. werden rausgefiltert
-- **Brand-Guard**: AirTag muss von Apple kommen, Galaxy von Samsung, Pixel von Google
+### Preisvergleich
+- **Geizhals**: Variant-Suche + Text-Fallback mit URL-Extraktion
+- **Amazon.de**: Preissuche via Jina
+- **Platform-Vergleich**: zeigt beide Preise + Savings %
+
+### Profit-Berechnung
+- **eBay**: 12.5% Commission + 2.49% Payment + 5.99€ Versand
+- **Kleinanzeigen**: 10% Commission
+- **Local**: 0% Fees
+- **Risiko**: 1-5% je nach Preis
+- **Netto-Profit**: nach allen Abzügen
+
+### Quality Score (0-100)
+- Profit (0-40): Netto-Profit + ROI
+- Reliability (0-25): Geizhals-Match, Preisverhältnis, Quelle
+- Market Position (0-20): Differenz zum Marktpreis
+- Risk (-15): Vertrag, Bundle, unrealistische Ratios
+- Rating: 🔥 EXZELLENT / ✅ GUT / ⚠️ OK / ⚠️ RISIKO / ❌ SCHLECHT
+
+### Price History
+- Trackt Geizhals-Preise über Zeit
+- Erkennt Allzeittiefs und Preistrends
+- 90 Tage Aufbewahrung
 
 ### Automatisierung
-- `deal-live-poll.timer`: alle 2h → Scraping + Geizhals + Dedup + Alert
-- `deal-retry-queue.timer`: alle 6h → fehlgeschlagene Geizhals-Matches nachprüfen
+- `deal-live-poll.timer`: alle 2h (Scraping + Vergleich + Dedup)
+- `deal-retry-queue.timer`: alle 6h (Retry-Queue)
 
 ### Normalisierte Modelle
 iPhone, Galaxy S/A/Z, Pixel, iPad, MacBook Air/Pro/Neo, Galaxy Tab, OnePlus Pad,
-PlayStation 5/Slim/Digital/Pro, PS5, Xbox, Switch, Steam Deck, ROG Ally, Legion Go,
+PlayStation 5/Slim/Digital/Pro, Xbox, Switch, Steam Deck, ROG Ally, Legion Go,
 Apple Watch, Galaxy Watch, OnePlus Watch, AirPods, Galaxy Buds, AirTag,
 ThinkPad, Surface, XPS, Kindle, DJI, GoPro
 
-## Status
-- **43 Tests** ✅
-- **Geizhals-Provider**: Variant-Suche + Text-Fallback
-- **Live-Timer**: aktiv, erste Ausführung erfolgreich
-- **Output-Format**: Telegram-Alert mit Geizhals pro Deal
-
-## Nächste Schritte
-1. Weitere Normalizer-Patterns (neue Modelle beobachten)
-2. eBay Sold-Listings Integration
-3. Kleinanzeigen/Ankauf-Adapter
-4. Telegram-Integration (automatische Alerts)
-5. Multi-Quellen-Support (idealo, Amazon Preistracker)
+## Tests: 76 ✅

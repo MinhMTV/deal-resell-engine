@@ -33,6 +33,7 @@ from app.deal_tracker import (
 )
 from app.trend_predict import predict_trend, get_all_trends, format_trend_prediction, format_trends_summary
 from app.daily_summary import generate_daily_summary, generate_daily_summary_json
+from app.url_health import check_pipeline_urls, format_health_report
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -621,6 +622,22 @@ def cmd_daily_report(args):
         print(generate_daily_summary())
 
 
+def cmd_url_health(args):
+    health = check_pipeline_urls(
+        stage=args.stage,
+        days=args.days,
+        max_urls=args.limit,
+        timeout=args.timeout,
+        auto_archive=args.auto_archive,
+    )
+    if args.out == "json":
+        print(json.dumps(health, ensure_ascii=False, indent=2))
+    else:
+        print(format_health_report(health))
+        if args.auto_archive and health["expired"] > 0:
+            print(f"\n🗑️ {health['expired']} abgelaufene Deals automatisch archiviert.")
+
+
 def main():
     p = argparse.ArgumentParser(description="Deal Resell Engine (rule-based MVP)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -713,6 +730,16 @@ def main():
     daily = sub.add_parser("daily-report", help="Combined daily overview: trends + pipeline + price movements")
     daily.add_argument("--out", choices=["text", "json"], default="text")
     daily.set_defaults(func=cmd_daily_report)
+
+    # URL health check
+    health = sub.add_parser("url-health", help="Check if deal URLs are still live")
+    health.add_argument("--stage", choices=["found", "compared", "notified", "bought", "sold", "archived"], default=None)
+    health.add_argument("--days", type=int, default=30)
+    health.add_argument("--limit", type=int, default=20)
+    health.add_argument("--timeout", type=int, default=10, help="Timeout per URL in seconds")
+    health.add_argument("--auto-archive", action="store_true", help="Auto-archive expired deals")
+    health.add_argument("--out", choices=["text", "json"], default="text")
+    health.set_defaults(func=cmd_url_health)
 
     args = p.parse_args()
     args.func(args)

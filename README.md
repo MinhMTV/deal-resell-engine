@@ -82,6 +82,18 @@ python -m app.main daily-report
 python -m app.main daily-report --out json
 ```
 
+### URL Health Check
+```bash
+# Prüfe ob Deal-URLs noch erreichbar sind
+python -m app.main url-health
+
+# Auto-archiviere abgelaufene Deals
+python -m app.main url-health --auto-archive
+
+# Nur notified Deals prüfen
+python -m app.main url-health --stage notified --limit 10
+```
+
 ### Retry Queue
 ```bash
 python scripts/retry_queue.py --out text
@@ -136,6 +148,13 @@ python -m app.main price-check --model "galaxy s26" --storage 512 --provider gei
 - **Conversion-Raten**: Wie viele Deals → Benachrichtigung → Kauf
 - **Top Deal Highlight**: Bester Deal der Woche nach Netto-Profit
 - **JSON-Mode**: Strukturierte Daten für Automation
+
+### URL Health Checker
+- **Parallel Checks**: HEAD-Requests mit ThreadPool (5 Worker)
+- **Status Detection**: Live (200), Expired (404/5xx), Redirect, Error (Timeout)
+- **Auto-Archive**: Abgelaufene Deals automatisch als 'archiviert' markieren
+- **Cache**: Ergebnisse pro Stunde cachen (state/url_health.json)
+- **Pipeline-Integration**: Prüft alle Pipeline-Stages oder gefilterte Subsets
 - Risk (-15): Vertrag, Bundle, unrealistische Ratios
 - Rating: 🔥 EXZELLENT / ✅ GUT / ⚠️ OK / ⚠️ RISIKO / ❌ SCHLECHT
 

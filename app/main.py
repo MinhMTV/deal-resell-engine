@@ -31,6 +31,7 @@ from app.deal_tracker import (
     format_pipeline_stats,
     format_deal_detail,
 )
+from app.trend_predict import predict_trend, get_all_trends, format_trend_prediction, format_trends_summary
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -593,6 +594,24 @@ def cmd_pipeline_advance(args):
         print(f"❌ Deal not found: {args.key}")
 
 
+def cmd_trend(args):
+    if args.model:
+        pred = predict_trend(args.model, days=args.days, predict_ahead=args.ahead)
+        if pred:
+            if args.out == "json":
+                print(json.dumps(pred, ensure_ascii=False, indent=2))
+            else:
+                print(format_trend_prediction(pred))
+        else:
+            print(f"No trend data for '{args.model}' (need ≥3 price snapshots)")
+    else:
+        trends = get_all_trends(days=args.days, predict_ahead=args.ahead)
+        if args.out == "json":
+            print(json.dumps(trends, ensure_ascii=False, indent=2))
+        else:
+            print(format_trends_summary(trends))
+
+
 def main():
     p = argparse.ArgumentParser(description="Deal Resell Engine (rule-based MVP)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -672,6 +691,14 @@ def main():
     padv.add_argument("--notes", type=str, default=None)
     padv.add_argument("--sold-price", type=float, default=None)
     padv.set_defaults(func=cmd_pipeline_advance)
+
+    # Trend predictor
+    trend = sub.add_parser("trend", help="Price trend predictions via linear regression")
+    trend.add_argument("--model", type=str, default=None, help="Specific model (e.g. 'galaxy s26')")
+    trend.add_argument("--days", type=int, default=30, help="Days to analyze")
+    trend.add_argument("--ahead", type=int, default=7, help="Days ahead to predict")
+    trend.add_argument("--out", choices=["text", "json"], default="text")
+    trend.set_defaults(func=cmd_trend)
 
     args = p.parse_args()
     args.func(args)

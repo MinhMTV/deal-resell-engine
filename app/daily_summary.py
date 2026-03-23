@@ -3,16 +3,24 @@
 Provides a quick overview of:
 - Best current deals
 - Price movements
+- Trend predictions
 - System health
 """
 
 from app.price_history import get_all_tracked, get_price_stats
+from app.trend_predict import get_all_trends, format_trends_summary
 
 
 def generate_daily_summary(hits: list[dict] | None = None) -> str:
     """Generate a daily summary string."""
     lines = []
     lines.append("📊 **Deal-Engine Tagesbericht**\n")
+
+    # Trend predictions
+    trends = get_all_trends(days=30)
+    if trends:
+        lines.append(format_trends_summary(trends))
+        lines.append("")
 
     # Price movements
     tracked = get_all_tracked()

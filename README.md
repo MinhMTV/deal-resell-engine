@@ -60,6 +60,19 @@ python -m app.main pipeline-advance --key "mydealz:galaxy s26:abc123" --stage bo
 python -m app.main pipeline-advance --key "mydealz:galaxy s26:abc123" --stage sold --sold-price 680
 ```
 
+### Price Trend Predictor
+```bash
+# Alle Trends (linear regression auf Preisverlauf)
+python -m app.main trend
+
+# Einzelnes Modell
+python -m app.main trend --model "galaxy s26"
+python -m app.main trend --model "iphone 16" --days 14 --ahead 14
+
+# JSON Output
+python -m app.main trend --out json
+```
+
 ### Retry Queue
 ```bash
 python scripts/retry_queue.py --out text
@@ -100,6 +113,13 @@ python -m app.main price-check --model "galaxy s26" --storage 512 --provider gei
 - **Top Deals**: Best-ranked by Netto-Profit über Zeitraum
 - **Daily Volume**: Deals pro Tag
 - **Auto-Tracking**: live_poll + market-compare tracken neue Deals automatisch
+
+### Price Trend Predictor
+- **Linear Regression**: Preisverlauf → Trend-Richtung (fallend/stabil/steigend)
+- **Prognose**: Geschätzter Preis in 7 und 14 Tagen
+- **Konfidenz**: 🟢 Hoch / 🟡 Mittel / 🔴 Niedrig basierend auf Datenmenge + R²
+- **Kaufempfehlung**: "Warten wenn Preis fällt", "Jetzt kaufen wenn Preis steigt"
+- **Daily Summary**: Trend-Prognosen im Tagesbericht integriert
 - Risk (-15): Vertrag, Bundle, unrealistische Ratios
 - Rating: 🔥 EXZELLENT / ✅ GUT / ⚠️ OK / ⚠️ RISIKO / ❌ SCHLECHT
 

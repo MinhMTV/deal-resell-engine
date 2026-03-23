@@ -33,6 +33,7 @@ from app.deal_tracker import (
 )
 from app.trend_predict import predict_trend, get_all_trends, format_trend_prediction, format_trends_summary
 from app.daily_summary import generate_daily_summary, generate_daily_summary_json
+from app.deal_report import generate_deal_report, generate_deal_report_json
 from app.url_health import check_pipeline_urls, format_health_report
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -622,6 +623,14 @@ def cmd_daily_report(args):
         print(generate_daily_summary())
 
 
+def cmd_deal_report(args):
+    if args.out == "json":
+        data = generate_deal_report_json(days=args.days)
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        print(generate_deal_report(days=args.days, top_n=args.top))
+
+
 def cmd_url_health(args):
     health = check_pipeline_urls(
         stage=args.stage,
@@ -730,6 +739,13 @@ def main():
     daily = sub.add_parser("daily-report", help="Combined daily overview: trends + pipeline + price movements")
     daily.add_argument("--out", choices=["text", "json"], default="text")
     daily.set_defaults(func=cmd_daily_report)
+
+    # Deal report
+    dreport = sub.add_parser("deal-report", help="Deal report with top profits and trends")
+    dreport.add_argument("--days", type=int, default=1, help="Days to include")
+    dreport.add_argument("--top", type=int, default=10, help="Top N deals by profit")
+    dreport.add_argument("--out", choices=["text", "json"], default="text")
+    dreport.set_defaults(func=cmd_deal_report)
 
     # URL health check
     health = sub.add_parser("url-health", help="Check if deal URLs are still live")

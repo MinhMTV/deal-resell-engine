@@ -17,6 +17,7 @@ from app.scoring import score_deal
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price, estimate_profit, build_provider, estimate_market_price_debug
 from app.profit import calculate_best_platform, format_profit_line
+from app.price_history import log_price, get_price_stats, format_price_trend
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -255,6 +256,22 @@ def _load_retry_queue():
         return []
 
 
+def cmd_price_history(args):
+    if args.model:
+        stats = get_price_stats(args.model, days=args.days)
+        if stats:
+            print(format_price_trend(stats))
+        else:
+            print(f"No price history for '{args.model}'")
+    else:
+        all_tracked = get_all_tracked()
+        if not all_tracked:
+            print("No price history tracked yet. Run market-compare first.")
+            return
+        for s in all_tracked:
+            print(format_price_trend(s))
+
+
 def _save_retry_queue(rows):
     RETRY_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
     RETRY_QUEUE_PATH.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -329,6 +346,9 @@ def cmd_market_compare(args):
                 }
             )
             continue
+
+        # Log price to history
+        log_price(model, float(geizhals_min), source="geizhals", url=geizhals_link)
 
         diff = round(float(geizhals_min) - compare_price, 2)
         if diff >= args.min_diff:
@@ -531,6 +551,11 @@ def main():
     profit.add_argument("--out", choices=["text", "json"], default="text")
     profit.add_argument("--json-schema", choices=["full", "alert"], default="full")
     profit.set_defaults(func=cmd_profit_report)
+
+    phist = sub.add_parser("price-history")
+    phist.add_argument("--model", type=str, default=None, help="Show history for specific model (e.g. 'galaxy s26')")
+    phist.add_argument("--days", type=int, default=30, help="Days to look back")
+    phist.set_defaults(func=cmd_price_history)
 
     args = p.parse_args()
     args.func(args)

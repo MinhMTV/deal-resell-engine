@@ -19,6 +19,7 @@ from app.market_price import estimate_market_price, estimate_profit, build_provi
 from app.profit import calculate_best_platform, format_profit_line
 from app.price_history import log_price, get_price_stats, format_price_trend
 from app.scoring_v2 import calculate_deal_score, format_score_line
+from app.platforms import lookup_amazon_price, compare_platforms, format_comparison
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -383,6 +384,17 @@ def cmd_market_compare(args):
             }
             # Calculate quality score
             hit["deal_score"] = calculate_deal_score(hit)
+
+            # Cross-platform comparison (Amazon)
+            amazon = lookup_amazon_price(model, normalized.get("normalized_storage_gb"))
+            if amazon.get("price"):
+                hit["amazon_price"] = amazon["price"]
+                hit["amazon_url"] = amazon.get("url")
+                comparison = compare_platforms(effective_price, float(geizhals_min), amazon["price"])
+                hit["platform_comparison"] = comparison
+            else:
+                hit["amazon_price"] = None
+
             hits.append(hit)
 
     _save_retry_queue(retry_queue)
@@ -421,9 +433,19 @@ def cmd_market_compare(args):
         tag = "📋 Vertrag | " if h.get("is_contract") else ""
         bundle_warn = f" ⚠️ Bundle ({h['bundle_reason']})" if h.get("is_bundle") else ""
         profit_line = f"\n   💰 {h['profit_detail']}" if h.get("profit_detail") else ""
+        amazon_line = ""
+        if h.get("amazon_price"):
+            amazon_diff = round(h["amazon_price"] - h.get("effective_price", h["deal_price"]), 2)
+            amazon_sign = "+" if amazon_diff >= 0 else ""
+            amazon_line = f"\n   🛒 Amazon: {h['amazon_price']}€ ({amazon_sign}{amazon_diff}€)"
+
+        score_line = ""
+        if h.get("deal_score"):
+            score_line = f"\n   {format_score_line(h['deal_score'])}"
+
         print(
             f"{i}. [{h['source']}] {tag}{h['normalized_model']}{storage} — {price_line}{bundle_warn}\n"
-            f"   {h['deal_url']}{geizhals_line}{profit_line}"
+            f"   {h['deal_url']}{geizhals_line}{amazon_line}{profit_line}{score_line}"
         )
 
 
@@ -471,6 +493,10 @@ def _print_alert_format(hits: list[dict], checked: int, retry_count: int):
                 print(f"   🏷️ Geizhals min: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
                 if h.get("geizhals_link"):
                     print(f"   🔗 {h['geizhals_link']}")
+            if h.get("amazon_price"):
+                amazon_diff = round(h["amazon_price"] - h.get("effective_price", h["deal_price"]), 2)
+                amazon_sign = "+" if amazon_diff >= 0 else ""
+                print(f"   🛒 Amazon: {h['amazon_price']}€ ({amazon_sign}{amazon_diff}€)")
             if h.get("profit_detail"):
                 print(f"   💰 {h['profit_detail']}")
             else:

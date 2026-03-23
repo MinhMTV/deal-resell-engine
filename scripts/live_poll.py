@@ -21,6 +21,7 @@ from app.normalize import normalize_product
 from app.market_price import estimate_market_price_debug
 from app.profit import calculate_best_platform, format_profit_line
 from app.price_history import log_price
+from app.deal_tracker import connect_tracker, mark_found, update_stage
 
 SENT_PATH = PROJECT_ROOT / "state" / "sent_deals.json"
 
@@ -50,6 +51,7 @@ def save_sent(keys: set):
 def run_poll(max_pages: int = 15, max_checks: int = 60, min_diff: float = 15.0) -> dict:
     sent = load_sent()
     now = datetime.now(timezone.utc)
+    tracker_conn = connect_tracker()
 
     all_deals = []
     for src in ["mydealz", "preisjaeger"]:
@@ -146,6 +148,9 @@ def run_poll(max_pages: int = 15, max_checks: int = 60, min_diff: float = 15.0) 
         }
         new_hits.append(hit)
         sent.add(key)
+
+        # Track in deal pipeline
+        mark_found(tracker_conn, hit)
 
     # Save updated sent state
     save_sent(sent)

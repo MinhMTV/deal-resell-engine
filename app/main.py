@@ -21,6 +21,16 @@ from app.price_history import log_price, get_price_stats, format_price_trend
 from app.scoring_v2 import calculate_deal_score, format_score_line
 from app.platforms import lookup_amazon_price, compare_platforms, format_comparison
 from app.recommend import score_recommendation, format_recommendation
+from app.deal_tracker import (
+    connect_tracker,
+    mark_found as tracker_mark_found,
+    update_stage as tracker_update_stage,
+    get_deal as tracker_get_deal,
+    list_deals as tracker_list_deals,
+    get_pipeline_stats,
+    format_pipeline_stats,
+    format_deal_detail,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -479,6 +489,12 @@ def _print_alert_format(hits: list[dict], checked: int, retry_count: int):
     if not hits:
         return
 
+    # Track hits in deal pipeline
+    tracker_conn = connect_tracker()
+    for h in hits:
+        tracker_mark_found(tracker_conn, h)
+    tracker_conn.close()
+
     # Split into contract and non-contract
     contract_hits = [h for h in hits if h.get("is_contract")]
     direct_hits = [h for h in hits if not h.get("is_contract")]
@@ -539,6 +555,44 @@ def _print_alert_format(hits: list[dict], checked: int, retry_count: int):
         print(f"⏳ {retry_count} Deals in Retry-Queue (Geizhals kein Match, wird nachgeprüft)")
 
 
+def cmd_pipeline_stats(args):
+    conn = connect_tracker(args.db)
+    stats = get_pipeline_stats(conn, days=args.days)
+    if args.out == "json":
+        print(json.dumps(stats, ensure_ascii=False, indent=2))
+    else:
+        print(format_pipeline_stats(stats))
+
+
+def cmd_pipeline_list(args):
+    conn = connect_tracker(args.db)
+    deals = tracker_list_deals(conn, stage=args.stage, days=args.days, limit=args.limit)
+    if not deals:
+        print("No deals in pipeline.")
+        return
+    if args.out == "json":
+        print(json.dumps(deals, ensure_ascii=False, indent=2))
+    else:
+        for i, d in enumerate(deals, 1):
+            print(f"{i}. {format_deal_detail(d)}\n")
+
+
+def cmd_pipeline_advance(args):
+    conn = connect_tracker(args.db)
+    extra = {}
+    if args.notes:
+        extra["notes"] = args.notes
+    if args.sold_price is not None:
+        extra["sold_price"] = args.sold_price
+    ok = tracker_update_stage(conn, args.key, args.stage, **extra)
+    if ok:
+        deal = tracker_get_deal(conn, args.key)
+        print(f"✅ Updated to '{args.stage}':")
+        print(format_deal_detail(deal))
+    else:
+        print(f"❌ Deal not found: {args.key}")
+
+
 def main():
     p = argparse.ArgumentParser(description="Deal Resell Engine (rule-based MVP)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -595,6 +649,29 @@ def main():
     phist.add_argument("--model", type=str, default=None, help="Show history for specific model (e.g. 'galaxy s26')")
     phist.add_argument("--days", type=int, default=30, help="Days to look back")
     phist.set_defaults(func=cmd_price_history)
+
+    # Pipeline tracker commands
+    pstats = sub.add_parser("pipeline-stats", help="Deal pipeline statistics")
+    pstats.add_argument("--db", default=DB_PATH)
+    pstats.add_argument("--days", type=int, default=30)
+    pstats.add_argument("--out", choices=["text", "json"], default="text")
+    pstats.set_defaults(func=cmd_pipeline_stats)
+
+    plist = sub.add_parser("pipeline-list", help="List deals in pipeline")
+    plist.add_argument("--db", default=DB_PATH)
+    plist.add_argument("--stage", choices=["found", "compared", "notified", "bought", "sold", "archived"], default=None)
+    plist.add_argument("--days", type=int, default=30)
+    plist.add_argument("--limit", type=int, default=20)
+    plist.add_argument("--out", choices=["text", "json"], default="text")
+    plist.set_defaults(func=cmd_pipeline_list)
+
+    padv = sub.add_parser("pipeline-advance", help="Advance deal to next stage")
+    padv.add_argument("--key", required=True, help="Alert key (source:model:hash)")
+    padv.add_argument("--stage", required=True, choices=["found", "compared", "notified", "bought", "sold", "archived"])
+    padv.add_argument("--db", default=DB_PATH)
+    padv.add_argument("--notes", type=str, default=None)
+    padv.add_argument("--sold-price", type=float, default=None)
+    padv.set_defaults(func=cmd_pipeline_advance)
 
     args = p.parse_args()
     args.func(args)

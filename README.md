@@ -45,6 +45,21 @@ python -m app.main price-history                 # Alle Modelle
 python -m app.main price-history --model "galaxy s26"  # Ein Modell
 ```
 
+### Deal Pipeline Tracker
+```bash
+# Pipeline-Stats (letzte 30 Tage)
+python -m app.main pipeline-stats
+
+# Deals nach Stage filtern
+python -m app.main pipeline-list --stage found --limit 10
+python -m app.main pipeline-list --stage notified
+
+# Deal auf nächste Stufe setzen
+python -m app.main pipeline-advance --key "mydealz:galaxy s26:abc123" --stage notified
+python -m app.main pipeline-advance --key "mydealz:galaxy s26:abc123" --stage bought --notes "Bestellt bei Amazon"
+python -m app.main pipeline-advance --key "mydealz:galaxy s26:abc123" --stage sold --sold-price 680
+```
+
 ### Retry Queue
 ```bash
 python scripts/retry_queue.py --out text
@@ -78,6 +93,13 @@ python -m app.main price-check --model "galaxy s26" --storage 512 --provider gei
 - Profit (0-40): Netto-Profit + ROI
 - Reliability (0-25): Geizhals-Match, Preisverhältnis, Quelle
 - Market Position (0-20): Differenz zum Marktpreis
+
+### Deal Pipeline Tracker
+- **Lifecycle-Tracking**: found → compared → notified → bought → sold → archived
+- **Conversion-Stats**: Found→Notified, Notified→Bought, Bought→Sold %
+- **Top Deals**: Best-ranked by Netto-Profit über Zeitraum
+- **Daily Volume**: Deals pro Tag
+- **Auto-Tracking**: live_poll + market-compare tracken neue Deals automatisch
 - Risk (-15): Vertrag, Bundle, unrealistische Ratios
 - Rating: 🔥 EXZELLENT / ✅ GUT / ⚠️ OK / ⚠️ RISIKO / ❌ SCHLECHT
 

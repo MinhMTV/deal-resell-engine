@@ -20,6 +20,7 @@ from app.profit import calculate_best_platform, format_profit_line
 from app.price_history import log_price, get_price_stats, format_price_trend
 from app.scoring_v2 import calculate_deal_score, format_score_line
 from app.platforms import lookup_amazon_price, compare_platforms, format_comparison
+from app.recommend import score_recommendation, format_recommendation
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRY_QUEUE_PATH = PROJECT_ROOT / "state" / "retry_queue.json"
@@ -395,6 +396,9 @@ def cmd_market_compare(args):
             else:
                 hit["amazon_price"] = None
 
+            # Buy recommendation
+            hit["recommendation"] = score_recommendation(hit)
+
             hits.append(hit)
 
     _save_retry_queue(retry_queue)
@@ -443,9 +447,13 @@ def cmd_market_compare(args):
         if h.get("deal_score"):
             score_line = f"\n   {format_score_line(h['deal_score'])}"
 
+        rec_line = ""
+        if h.get("recommendation"):
+            rec_line = f"\n   {format_recommendation(h['recommendation'])}"
+
         print(
             f"{i}. [{h['source']}] {tag}{h['normalized_model']}{storage} — {price_line}{bundle_warn}\n"
-            f"   {h['deal_url']}{geizhals_line}{amazon_line}{profit_line}{score_line}"
+            f"   {h['deal_url']}{geizhals_line}{amazon_line}{profit_line}{score_line}{rec_line}"
         )
 
 

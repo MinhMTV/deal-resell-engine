@@ -22,6 +22,7 @@ from app.market_price import estimate_market_price_debug
 from app.profit import calculate_best_platform, format_profit_line
 from app.price_history import log_price
 from app.deal_tracker import connect_tracker, mark_found, update_stage
+from app.trend_predict import predict_trend
 
 SENT_PATH = PROJECT_ROOT / "state" / "sent_deals.json"
 
@@ -149,8 +150,11 @@ def run_poll(max_pages: int = 15, max_checks: int = 60, min_diff: float = 15.0) 
         new_hits.append(hit)
         sent.add(key)
 
-        # Track in deal pipeline
+        # Track in deal pipeline: found → notified (since it passed all filters)
         mark_found(tracker_conn, hit)
+        update_stage(tracker_conn, key, "notified")
+
+    tracker_conn.close()
 
     # Save updated sent state
     save_sent(sent)
@@ -207,6 +211,13 @@ def print_alert(hits: list[dict]):
                 print(f"   🔗 {h['geizhals_link']}")
             if h.get("profit_detail"):
                 print(f"   💰 {h['profit_detail']}")
+
+            # Trend prediction
+            trend = predict_trend(h.get("normalized_model", ""), days=30)
+            if trend:
+                trend_emoji = {"dropping": "📉", "stable": "📊", "rising": "📈"}.get(trend["trend"], "❓")
+                print(f"   {trend_emoji} Trend: {trend['trend']} ({trend['slope_per_day']:+.1f}€/d) → {trend['recommendation']}")
+
             print()
 
     if contract:
@@ -228,6 +239,13 @@ def print_alert(hits: list[dict]):
             print(f"   🏷️ Geizhals: {h['geizhals_min']}€ → Diff: {diff_sign}{h['diff']}€")
             if h.get("geizhals_link"):
                 print(f"   🔗 {h['geizhals_link']}")
+
+            # Trend prediction
+            trend = predict_trend(h.get("normalized_model", ""), days=30)
+            if trend:
+                trend_emoji = {"dropping": "📉", "stable": "📊", "rising": "📈"}.get(trend["trend"], "❓")
+                print(f"   {trend_emoji} Trend: {trend['trend']} ({trend['slope_per_day']:+.1f}€/d) → {trend['recommendation']}")
+
             print()
 
 

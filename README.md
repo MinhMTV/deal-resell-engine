@@ -173,4 +173,4 @@ PlayStation 5/Slim/Digital/Pro, Xbox, Switch, Steam Deck, ROG Ally, Legion Go,
 Apple Watch, Galaxy Watch, OnePlus Watch, AirPods, Galaxy Buds, AirTag,
 ThinkPad, Surface, XPS, Kindle, DJI, GoPro
 
-## Tests: 121 ✅
+## Tests: 127 ✅

@@ -20,6 +20,7 @@ from app.intake import fetch_live_source, detect_contract_deal, detect_bundle_de
 from app.normalize import normalize_product
 from app.market_price import estimate_market_price_debug
 from app.profit import calculate_best_platform, format_profit_line
+from app.price_history import log_price
 
 SENT_PATH = PROJECT_ROOT / "state" / "sent_deals.json"
 
@@ -108,6 +109,9 @@ def run_poll(max_pages: int = 15, max_checks: int = 60, min_diff: float = 15.0) 
 
         if geizhals_min is None:
             continue
+
+        # Log price to history
+        log_price(model, float(geizhals_min), source="geizhals", url=geizhals_link)
 
         diff = round(float(geizhals_min) - effective_price, 2)
         if diff < min_diff:

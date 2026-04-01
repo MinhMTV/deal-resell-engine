@@ -487,6 +487,11 @@ class GeizhalsProvider(WebSearchPriceProvider):
     def __init__(self):
         # geizhals works more reliably with `fs` search than `q` in this environment.
         super().__init__(base_url="geizhals.de", source_name="geizhals", min_ratio=0.65, max_ratio=1.35)
+        self._static_checker = StaticTableMarketPriceProvider()
+
+    def _is_known_model(self, deal: dict) -> bool:
+        """Only search Geizhals for models we know exist in the static table."""
+        return self._static_checker.estimate(deal) is not None
 
     def _build_url(self, query: str) -> str:
         q = requests.utils.quote(query)
@@ -525,6 +530,9 @@ class GeizhalsProvider(WebSearchPriceProvider):
             return None
 
     def estimate_with_variants(self, deal: dict) -> dict:
+        # Only search for known models; unknown models should return None
+        if not self._is_known_model(deal):
+            return {"price": None, "attempts": []}
         model = (deal.get("normalized_model") or "").strip().lower()
         storage = deal.get("normalized_storage_gb")
         attempts = []
